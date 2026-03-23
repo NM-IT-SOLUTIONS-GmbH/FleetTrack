@@ -3964,16 +3964,23 @@ function onLoginInput(val) {
 
   // Check if matches a superadmin username
   const matchedSA = DB.superadmins.filter(sa => sa.username.toLowerCase().startsWith(v) && v.length > 0);
-  const exactSA = DB.superadmins.find(sa => sa.username.toLowerCase() === v);
 
-  if (exactSA || matchedSA.length > 0) {
+  if (matchedSA.length > 0) {
     saWrap.style.display = 'block';
     mandantGroup.style.display = 'none';
-    renderSAUserList(v);
-    if (hint) hint.textContent = '⚡ SuperAdmin erkannt — Benutzer auswählen und Kennwort eingeben.';
+    // Only re-render list if no SA is selected yet
+    if (!selectedSuperAdmin) renderSAUserList(v);
+    if (hint) hint.textContent = selectedSuperAdmin
+      ? '⚡ ' + selectedSuperAdmin.name + ' ausgewählt — Kennwort eingeben.'
+      : '⚡ SuperAdmin erkannt — Benutzer auswählen.';
     return;
   }
-  saWrap.style.display = 'none';
+
+  // If user cleared the field, reset selection
+  if (v.length === 0) {
+    selectedSuperAdmin = null;
+    saWrap.style.display = 'none';
+  }
 
   // Check if matches an admin username in any mandant
   const isAdmin = DB.mandanten.some(m => m.adminUser.toLowerCase() === v);
@@ -4004,8 +4011,14 @@ function renderSAUserList(filter) {
       <span style="color:var(--muted)">›</span>`;
     btn.onclick = () => {
       selectedSuperAdmin = sa;
-      list.querySelectorAll('button').forEach(b => b.style.borderColor = 'var(--border)');
+      list.querySelectorAll('button').forEach(b => {
+        b.style.borderColor = 'var(--border)';
+        b.style.background = 'var(--surface2)';
+      });
       btn.style.borderColor = 'var(--accent)';
+      btn.style.background = 'rgba(26,122,191,0.08)';
+      const hint = document.getElementById('login-hint');
+      if (hint) hint.textContent = '⚡ ' + sa.name + ' ausgewählt — jetzt Kennwort eingeben.';
       document.getElementById('login-pass').focus();
     };
     list.appendChild(btn);
