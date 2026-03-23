@@ -2427,7 +2427,8 @@ function msgTab(name) {
 }
 
 function renderDriverNotifs2() {
-  
+  const list = document.getElementById('fahrer-msgs-list');
+  if (!list) return;
   list.innerHTML = '';
   const myNotifs = DB.notifications.filter(n => (n.to === currentUser.id || n.to === 'all') && n.from === 'Admin');
   if (myNotifs.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:40px 20px">Keine Nachrichten</p>'; return; }
@@ -2465,7 +2466,8 @@ function handleDriverMsgPhoto(event) {
 }
 
 function renderDriverMsgPhotos() {
-  
+  const prev = document.getElementById('driver-msg-photo-preview');
+  if (!prev) return;
   prev.innerHTML = '';
   driverMsgPhotos.forEach((src, i) => {
     const img = document.createElement('img');
@@ -2510,7 +2512,8 @@ function sendDriverMessage() {
 }
 
 function renderDriverSentMsgs() {
-  
+  const list = document.getElementById('driver-sent-list');
+  if (!list) return;
   list.innerHTML = '';
   const myMsgs = (DB.driverMessages || []).filter(m => m.fromId === currentUser.id);
   if (myMsgs.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine gesendeten Nachrichten</p>'; return; }
@@ -2565,7 +2568,8 @@ function clearAllPODs() {
 }
 
 function togglePODForward() {
-  
+  const wrap = document.getElementById('pod-forward-wrap');
+  if (!wrap) return;
   wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
 }
 
@@ -2636,7 +2640,8 @@ function downloadDriverQR() {
 }
 
 function renderFahrerMsgs() {
-  
+  const list = document.getElementById('fahrer-msgs-list');
+  if (!list) return;
   list.innerHTML = '';
   const msgs = DB.driverMessages || [];
   if (msgs.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine Nachrichten von Fahrern</p>'; return; }
@@ -2763,7 +2768,8 @@ function handleAbfahrtPhoto(event, idx) {
 }
 
 function renderAbfahrtPhotos(idx) {
-  
+  const prev = document.getElementById('photo-preview-' + idx);
+  if (!prev) return;
   prev.innerHTML = '';
   (abfahrtPhotos[idx] || []).forEach((src, i) => {
     
@@ -2862,7 +2868,8 @@ function handlePodPhotos(event) {
 }
 
 function renderPodPhotos() {
-  
+  const prev = document.getElementById('pod-photo-preview');
+  if (!prev) return;
   prev.innerHTML = '';
   podPhotos.forEach((src, i) => {
     
@@ -3324,7 +3331,7 @@ function downloadLastPDF() {
 // ─── ADMIN ────────────────────────────────────────────────────────
 function refreshAdmin() {
   const active = DB.drivers.filter(d => d.status === 'active').length;
-  
+  const today = new Date().toDateString();
   const checksToday = DB.checks.filter(c => new Date(c.timestamp).toDateString() === today).length;
   const maengel = DB.checks.reduce((sum, c) => sum + (c.answers ? c.answers.filter(a => a.answer === 'nein').length : 0), 0);
   document.getElementById('stat-fahrer').textContent = active;
@@ -3510,7 +3517,8 @@ function renderWeeklyChart() {
 }
 
 function renderFahrerList(drivers) {
-  
+  const list = document.getElementById('fahrer-list');
+  if (!list) return;
   list.innerHTML = '';
   if (drivers.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine Fahrer gefunden</p>'; return; }
   
@@ -3542,6 +3550,7 @@ function filterFahrer(q) {
 function populateFilterDropdowns() {
   ['filter-check-fahrer','filter-pod-fahrer','notif-recipient'].forEach(id => {
     const sel = document.getElementById(id);
+    if (!sel) return;
     const current = sel.value;
     while (sel.options.length > 1) sel.remove(1);
     DB.drivers.forEach(d => {
@@ -3634,10 +3643,13 @@ function deleteDriver() {
 }
 
 function renderKontrollen() {
-  
+  const list = document.getElementById('kontrollen-list');
+  if (!list) return;
   list.innerHTML = '';
-  const fDriver = document.getElementById('filter-check-fahrer').value;
-  const fDate = document.getElementById('filter-check-date').value;
+  const fDriverEl = document.getElementById('filter-check-fahrer');
+  const fDriver = fDriverEl ? fDriverEl.value : '';
+  const fDateEl = document.getElementById('filter-check-date');
+  const fDate = fDateEl ? fDateEl.value : '';
   const fMaengel = document.getElementById('filter-check-maengel') ? document.getElementById('filter-check-maengel').value : '';
   let checks = [...DB.checks].reverse();
   if (fDriver) checks = checks.filter(c => c.driverId === fDriver);
@@ -3721,7 +3733,8 @@ function openKontrolleDetail(c) {
 }
 
 function renderPODs() {
-  
+  const list = document.getElementById('pods-list');
+  if (!list) return;
   list.innerHTML = '';
   
   
@@ -3867,7 +3880,8 @@ async function sendNotification() {
 }
 
 function renderSentNotifs() {
-  
+  const list = document.getElementById('sent-notifs-list');
+  if (!list) return;
   list.innerHTML = '';
   [...DB.notifications].reverse().forEach(n => {
     const toLabel = n.to === 'all' ? 'Alle Fahrer' : (DB.drivers.find(d => d.id === n.to)?.vorname + ' ' + DB.drivers.find(d => d.id === n.to)?.nachname);
@@ -3887,7 +3901,8 @@ function renderSentNotifs() {
 }
 
 function renderDriverNotifs() {
-  
+  const list = document.getElementById('driver-notifs-list');
+  if (!list) return;
   list.innerHTML = '';
   
   if (myNotifs.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:40px 20px">Keine Nachrichten</p>'; return; }
@@ -4159,1252 +4174,124 @@ document.addEventListener('keypress', e => {
   if (activeTab.id === 'ltab-super') doLoginSuper();
 });
 
-function doLogout() {
-  currentUser = null; currentRole = null; screenHistory = [];
-  document.getElementById('login-user').value = '';
-  document.getElementById('login-pass').value = '';
-  goTo('screen-login');
-}
+
 
 // ─── DRIVER HOME ─────────────────────────────────────────────────
-function refreshDriverHome() {
-  document.getElementById('driver-welcome-name').textContent = currentUser.vorname + ' ' + currentUser.nachname;
-  document.getElementById('driver-topbar-sub').textContent = 'Fahrer';
-  // Show/hide buttons based on modules
-  
-  Object.entries(moduleMap).forEach(([mod, btnId]) => {
-    
-    if (btn) btn.style.display = hasModule(mod) ? 'block' : 'none';
-  });
-  
-  document.getElementById('driver-date').textContent = now.toLocaleDateString('de-DE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-  // Notifications
-  
-  
-  if (myNotifs.length > 0) { badge.style.display='flex'; badge.textContent = myNotifs.length; }
-  else { badge.style.display='none'; }
-  
-  if (dot) dot.classList.toggle('show', myNotifs.length > 0);
-  updateOfflinePending();
-}
+
 
 // ─── ABFAHRTSKONTROLLE ────────────────────────────────────────────
-function initAbfahrt() {
-  abfahrtAnswers = {};
-  abfahrtPhotos = {};
-  
-  container.innerHTML = '';
-  
-  questions.forEach((q, i) => {
-    
-    div.className = 'question-card';
-    div.id = `qcard-${i}`;
-    div.innerHTML = `
-      <div class="question-num">Frage ${i+1} von ${QUESTIONS.length}</div>
-      <div class="question-text">${q}</div>
-      <div class="answer-group">
-        <button class="answer-btn" onclick="setAnswer(${i},'ja',this)">✅ Ja / In Ordnung</button>
-        <button class="answer-btn" onclick="setAnswer(${i},'nein',this)">❌ Nein / Mängel</button>
-      </div>
-      <div class="mangel-area" id="mangel-${i}">
-        <div class="form-group mt-8"><label>Bemerkung</label><textarea id="remark-${i}" placeholder="Beschreiben Sie den Mangel..."></textarea></div>
-        <div class="photo-preview" id="photos-prev-${i}"></div>
-        <div class="flex gap-8 mt-8">
-          <div class="photo-add-btn" onclick="triggerPhotoUpload('photo-input-${i}')">📷</div>
-        </div>
-        <input type="file" id="photo-input-${i}" accept="image/*" capture="environment" multiple onchange="handleAbfahrtPhoto(event,${i})">
-      </div>
-    `;
-    container.appendChild(div);
-  });
-  initSigPad('sig-canvas-abfahrt');
-  updateAbfahrtProgress();
-}
 
-function setAnswer(idx, val, btn) {
-  abfahrtAnswers[idx] = val;
-  
-  card.querySelectorAll('.answer-btn').forEach(b => b.className = 'answer-btn');
-  btn.className = `answer-btn selected-${val}`;
-  card.classList.remove('has-issue','ok');
-  if (val === 'nein') { card.classList.add('has-issue'); document.getElementById(`mangel-${idx}`).classList.add('show'); }
-  else { card.classList.add('ok'); document.getElementById(`mangel-${idx}`).classList.remove('show'); }
-  updateAbfahrtProgress();
-}
 
-function updateAbfahrtProgress() {
-  
-  
-  
-  document.getElementById('abfahrt-progress').style.width = pct + '%';
-  
-  
-  
-  
-  if (counter) { counter.textContent = answered + ' / ' + total; counter.style.color = color; counter.style.background = bg; }
-  
-  if (barCounter) { barCounter.textContent = answered + '/' + total; barCounter.style.color = color; }
-  if (isComplete) document.getElementById('abfahrt-progress').style.background = 'var(--green)';
-  else document.getElementById('abfahrt-progress').style.background = 'linear-gradient(90deg, var(--accent), var(--accent2))';
-}
 
-function handleAbfahrtPhoto(event, idx) {
-  if (!abfahrtPhotos[idx]) abfahrtPhotos[idx] = [];
-  
-  files.forEach(file => {
-    
-    reader.onload = e => {
-      abfahrtPhotos[idx].push(e.target.result);
-      renderAbfahrtPhotos(idx);
-    };
-    reader.readAsDataURL(file);
-  });
-}
 
-function renderAbfahrtPhotos(idx) {
-  
-  prev.innerHTML = '';
-  (abfahrtPhotos[idx] || []).forEach((src, i) => {
-    
-    img.className = 'photo-thumb'; img.src = src;
-    img.onclick = () => { abfahrtPhotos[idx].splice(i,1); renderAbfahrtPhotos(idx); };
-    prev.appendChild(img);
-  });
-}
 
-async function submitAbfahrt() {
-  
-  for (let i = 0; i < qs.length; i++) {
-    if (!abfahrtAnswers[i]) { showToast('⚠️ Bitte alle Fragen beantworten (Frage ' + (i+1) + ')', 'error'); return; }
-  }
 
-  const answers = getMandantQuestions().map((q, i) => ({
-    question: q, answer: abfahrtAnswers[i],
-    remark: document.getElementById(`remark-${i}`)?.value || '',
-    photos: abfahrtPhotos[i] || []
-  }));
-  const entry = {
-    id: checkId,
-    vorgangId: checkId,
-    driverId: currentUser.id,
-    driverName: currentUser.vorname + ' ' + currentUser.nachname,
-    mandantId: currentMandant ? currentMandant.id : 'm1',
-    timestamp: new Date().toISOString(),
-    answers, signature: sigData,
-    status: 'offen',
-    offline: !isOnline
-  };
-  if (isOnline && firebaseDB) {
-    const makeThumbnailCheck = (b64) => new Promise(res => {
-      if (!b64 || b64.length < 10) { res(''); return; }
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement('canvas');
-        const maxW = 100; let w = img.width, h = img.height;
-        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        res(c.toDataURL('image/jpeg', 0.4));
-      };
-      img.onerror = () => res('');
-      img.src = b64;
-    });
-    const answersWithThumbs = await Promise.all(entry.answers.map(async a => {
-      if (a.photos && a.photos.length > 0) {
-        const thumbs = await Promise.all(a.photos.map(p => makeThumbnailCheck(p)));
-        return { ...a, photos: thumbs, photoCount: a.photos.length };
-      }
-      return { ...a, photos: [], photoCount: 0 };
-    }));
-    const sigThumb = entry.signature ? await makeThumbnailCheck(entry.signature) : '';
-    const entryForDB = { ...entry, answers: answersWithThumbs, signature: sigThumb };
-    const mid = entry.mandantId || 'M-0001';
-    firebaseDB.ref('mandanten/' + mid + '/checks/' + entry.id).set(entryForDB);
-    DB.checks.push(entry);
-  } else if (isOnline) {
-    DB.checks.push(entry);
-  } else {
-    saveOffline('check', entry);
-  }
-  generateAbfahrtPDF(entry);
-  document.getElementById('success-title').textContent = '✅ Abfahrtskontrolle gesendet!';
-  document.getElementById('success-icon').textContent = '✅';
-  if (isOnline) {
-    
-    setTimeout(() => {
-      sendEmailWithPDF(recipient, 'Abfahrtskontrolle – ' + entry.driverName,
-        'Anbei die Abfahrtskontrolle vom ' + new Date(entry.timestamp).toLocaleString('de-DE') + ' von Fahrer ' + entry.driverName + '.', 'check');
-    }, 800);
-    document.getElementById('success-msg').textContent = 'PDF wird an ' + recipient + ' gesendet...';
-  } else {
-    document.getElementById('success-msg').textContent = '📡 Offline gespeichert – wird automatisch synchronisiert.';
-  }
-  goTo('screen-success');
-}
+
+
+
+
+
 
 // ─── POD ─────────────────────────────────────────────────────────
-function initPOD() {
-  podPhotos = [];
-  document.getElementById('pod-photos').innerHTML = '';
-  document.getElementById('pod-remarks').value = '';
-}
 
-function handlePodPhotos(event) {
-  Array.from(event.target.files).forEach(file => {
-    
-    reader.onload = e => { podPhotos.push(e.target.result); renderPodPhotos(); };
-    reader.readAsDataURL(file);
-  });
-}
 
-function renderPodPhotos() {
-  
-  prev.innerHTML = '';
-  podPhotos.forEach((src, i) => {
-    
-    img.className = 'photo-thumb'; img.src = src;
-    img.onclick = () => { podPhotos.splice(i,1); renderPodPhotos(); };
-    prev.appendChild(img);
-  });
-}
 
-function submitPOD() {
-  if (!podPhotos.length) { showToast('⚠️ Bitte mindestens ein Foto aufnehmen', 'error'); return; }
-  const podId = 'P-' + (currentMandant ? currentMandant.id : 'M0') + '-' + Date.now();
-  const entry = {
-    id: podId,
-    vorgangId: podId,
-    driverId: currentUser.id,
-    driverName: currentUser.vorname + ' ' + currentUser.nachname,
-    mandantId: currentMandant ? currentMandant.id : 'M-0001',
-    timestamp: new Date().toISOString(),
-    photos: podPhotos,
-    remarks: document.getElementById('pod-remarks').value,
-    status: 'offen',
-    offline: !isOnline
-  };
-  // Save to Firebase or local
-  if (isOnline && firebaseDB) {
-    const makeThumbnailPOD2 = (b64) => new Promise(res => {
-      if (!b64 || b64.length < 10) { res(''); return; }
-      const img = new Image();
-      img.onload = () => {
-        
-         
-        
-        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        res(c.toDataURL('image/jpeg', 0.4));
-      };
-      img.onerror = () => res('');
-      img.src = b64;
-    });
-    Promise.all(entry.photos.map(p => makeThumbnail(p))).then(thumbs => {
-      
-      
-      firebaseDB.ref('mandanten/' + pmid + '/pods/' + entry.id).set(entryForDB);
-    });
-    DB.pods.push(entry); // keep full version with photos locally
-  } else if (isOnline) {
-    DB.pods.push(entry);
-  } else {
-    saveOffline('pod', entry);
-  }
-  generatePODPDF(entry);
-  // Show success immediately - process in background
-  document.getElementById('success-title').textContent = '✅ Belege erfolgreich gesendet!';
-  document.getElementById('success-icon').textContent = '✅';
-  document.getElementById('success-msg').textContent = 'Ihre ' + entry.photos.length + ' Beleg(e) wurden übermittelt. PDF wird im Hintergrund erstellt und per E-Mail versendet.';
-  document.getElementById('success-pdf-btn-wrap').style.display = 'none';
-  goTo('screen-success');
-  // Process PDF and email in background (non-blocking)
-  setTimeout(() => {
-  compressEntry(entry).then(async compressed => {
-    await generatePODPDF(compressed);
-    // Show download button once ready
-    
-    if (pdfBtn) { pdfBtn.style.display = 'block'; }
-    if (isOnline) {
-      
-      setTimeout(async () => {
-        // Build smart email from OCR
-        const ocrTexts = entry._ocrTexts || compressed._ocrTexts || [];
-        const ocrSection = ocrTexts.length > 0
-          ? ocrTexts.map((t, i) => 'Beleg ' + (i+1) + ':\n' + t.trim().substring(0, 400)).join('\n\n')
-          : '';
 
-        // Upload POD PDF to Cloudinary
-        let podPdfLink = 'https://demo.my-fleet.app';
-        if (lastPDFBlob) {
-          const podFilename = 'pod_' + (compressed || entry).driverName.replace(/\s/g,'_') + '_' + Date.now() + '.pdf';
-          const uploadedUrl = await uploadPDFToStorage(lastPDFBlob, podFilename);
-          if (uploadedUrl) podPdfLink = uploadedUrl;
-        }
 
-        const emailBody = [
-                  'Sehr geehrte Damen und Herren,',
-          '',
-          'Fahrer ' + compressed.driverName + ' hat am ' + new Date(compressed.timestamp).toLocaleString('de-DE') + ' Ablieferbelege übermittelt.',
-          '',
-          '━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-          'BELEG-INFORMATIONEN',
-          '━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-          'Fahrer: ' + compressed.driverName,
-          'Datum: ' + new Date(compressed.timestamp).toLocaleString('de-DE'),
-          'Anzahl Belege: ' + compressed.photos.length,
-          compressed.remarks ? 'Bemerkung: ' + compressed.remarks : '',
-          '',
-          ocrSection ? '━━━━━━━━━━━━━━━━━━━━━━━━━━━━' : '',
-          ocrSection ? 'ERKANNTER TEXT AUS BELEGEN (OCR)' : '',
-          ocrSection ? '━━━━━━━━━━━━━━━━━━━━━━━━━━━━' : '',
-          ocrSection || '',
-          '',
-          'Mit freundlichen Grüßen',
-          'my Fleet app – NM-IT Solutions GmbH'
-        ].filter(l => l !== undefined && l !== null).join('\n');
 
-        // Save OCR text to Firebase for search
-        if (firebaseDB && compressed._ocrTexts) {
-          firebaseDB.ref('pods/' + compressed.id + '/ocrText').set(compressed._ocrTexts.join(' '));
-          firebaseDB.ref('pods/' + compressed.id + '/photoCount').set(compressed.photos.length);
-        }
 
-        sendEmailWithPDF(recipient, 'POD Liefernachweis – ' + compressed.driverName, emailBody, 'pod');
-        document.getElementById('success-msg').textContent = 'E-Mail wird an ' + recipient + ' gesendet...';
-      }, 500);
-    } else {
-      document.getElementById('success-msg').textContent = '📡 Offline gespeichert – wird automatisch synchronisiert.';
-    }
-  });
-  }, 100); // small delay so success screen shows first
-}
 
 // ─── SIGNATURE PAD ────────────────────────────────────────────────
-function initSigPad(canvasId) {
-  
-  if (!canvas) return;
-  
-  canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-  canvas.height = canvas.offsetHeight * window.devicePixelRatio;
-  
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-  ctx.strokeStyle = '#1a7abf';
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round';
-  
 
-  function getPos(e) {
-    
-    
-    return { x: (src.clientX - r.left), y: (src.clientY - r.top) };
-  }
-  function start(e) { e.preventDefault(); drawing = true;  lastX = p.x; lastY = p.y; }
-  function move(e) {
-    e.preventDefault();
-    if (!drawing) return;
-    
-    ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y); ctx.stroke();
-    lastX = p.x; lastY = p.y;
-  }
-  function stop(e) { e.preventDefault(); drawing = false; }
 
-  canvas.addEventListener('mousedown', start);
-  canvas.addEventListener('mousemove', move);
-  canvas.addEventListener('mouseup', stop);
-  canvas.addEventListener('touchstart', start, { passive: false });
-  canvas.addEventListener('touchmove', move, { passive: false });
-  canvas.addEventListener('touchend', stop, { passive: false });
-}
 
-function clearSig(canvasId) {
-  
-  if (!canvas) return;
-  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-}
 
-function getSigData(canvasId) {
-  
-  if (!canvas) return '';
-  return canvas.toDataURL('image/png');
-}
+
 
 // ─── IMAGE COMPRESSION ───────────────────────────────────────────
-function compressImage(base64, maxWidth, quality) {
-  return new Promise(resolve => {
-    
-    img.onload = () => {
-      
-      
-      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
-      canvas.width = w; canvas.height = h;
-      
-      ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-    img.onerror = () => resolve(base64);
-    img.src = base64;
-  });
-}
 
-async function compressEntry(entry) {
-  // Compress all photos in answers
-  if (entry.answers) {
-    for (let a of entry.answers) {
-      if (a.photos && a.photos.length > 0) {
-        a.photos = await Promise.all(a.photos.map(p => compressImage(p, 800, 0.6)));
-      }
-    }
-  }
-  if (entry.photos) {
-    entry.photos = await Promise.all(entry.photos.map(p => compressImage(p, 800, 0.6)));
-  }
-  return entry;
-}
+
+
 
 // ─── PDF GENERATION ──────────────────────────────────────────────
-function generateAbfahrtPDF(entry) {
-  try {
-    const { jsPDF } = window.jspdf;
-    
-    
-    
-
-    function addPage() {
-      doc.addPage();
-      y = 15;
-      drawHeader();
-    }
-
-    function drawHeader() {
-      // Orange top bar
-      doc.setFillColor(245, 166, 35);
-      doc.rect(0, 0, pageW, 10, 'F');
-      // White background
-      doc.setFillColor(255, 255, 255);
-      doc.rect(0, 10, pageW, 287, 'F');
-    }
-
-    function checkY(needed) { if (y + needed > 275) addPage(); }
-
-    drawHeader();
-    y = 18;
-
-    // Title
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(20);
-    doc.setTextColor(30, 30, 30);
-    doc.text('Abfahrtskontrolle', marginL, y); y += 8;
-
-    // Meta info box
-    doc.setFillColor(245, 247, 250);
-    doc.setDrawColor(220, 220, 220);
-    doc.roundedRect(marginL, y, contentW, 18, 2, 2, 'FD');
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.setTextColor(80, 80, 80);
-    doc.text('Fahrer:', marginL + 4, y + 6);
-    doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-    doc.text(entry.driverName, marginL + 22, y + 6);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
-    doc.text('Datum:', marginL + 4, y + 13);
-    doc.setFont('helvetica', 'bold'); doc.setTextColor(30, 30, 30);
-    doc.text(new Date(entry.timestamp).toLocaleString('de-DE'), marginL + 22, y + 13);
-    y += 24;
-
-    // Questions
-    entry.answers.forEach((a, i) => {
-      
-      
-      checkY(16);
-
-      // Row background alternating
-      if (i % 2 === 0) {
-        doc.setFillColor(250, 251, 253);
-        doc.rect(marginL, y - 1, contentW, 12, 'F');
-      }
-
-      // Number
-      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-      doc.setTextColor(180, 180, 180);
-      doc.text(String(i + 1) + '.', marginL + 1, y + 5);
-
-      // Question text
-      doc.setFontSize(10); doc.setFont('helvetica', 'normal');
-      doc.setTextColor(30, 30, 30);
-      
-      doc.text(qlines, marginL + 9, y + 5);
-
-      // Answer badge
-      
-      
-      if (isOk) {
-        doc.setFillColor(220, 248, 232);
-        doc.setDrawColor(46, 180, 100);
-      } else {
-        doc.setFillColor(253, 225, 225);
-        doc.setDrawColor(220, 60, 60);
-      }
-      doc.roundedRect(badgeX, y + 1, badgeW, 7, 1.5, 1.5, 'FD');
-      doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-      doc.setTextColor(isOk ? 20 : 160, isOk ? 120 : 20, isOk ? 60 : 20);
-      
-      doc.text(label, badgeX + badgeW / 2, y + 6, { align: 'center' });
-
-      y += qlines.length > 1 ? qlines.length * 5 + 2 : 10;
-
-      // Remark directly under question
-      if (a.remark) {
-        checkY(8);
-        doc.setFontSize(8.5); doc.setFont('helvetica', 'italic');
-        doc.setTextColor(160, 80, 40);
-        
-        doc.text(rlines, marginL + 9, y);
-        y += rlines.length * 4.5 + 2;
-      }
-
-      // Photos directly under question (only for Mängel)
-      if (hasPhotos) {
-        checkY(10);
-        doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-        doc.setTextColor(160, 80, 40);
-        doc.text('Foto(s) zum Mangel:', marginL + 9, y);
-        y += 5;
-        
-        a.photos.forEach((photo, pi) => {
-          if (photoX + 55 > marginR) { photoX = marginL + 9; y += 58; }
-          checkY(58);
-          doc.setFillColor(245,247,250); doc.setDrawColor(200,200,200);
-          doc.roundedRect(photoX, y, 52, 50, 2, 2, 'FD');
-          try { doc.addImage(photo, 'JPEG', photoX+1, y+1, 50, 48); }
-          catch(e) { try { doc.addImage(photo, 'PNG', photoX+1, y+1, 50, 48); } catch(e2){} }
-          photoX += 56;
-        });
-        y += 54;
-      }
-
-      // Separator line
-      doc.setDrawColor(230, 230, 230);
-      doc.line(marginL, y, marginR, y);
-      y += 3;
-    });
-
-    y += 4;
-
-    // Signature
-    checkY(40);
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-    doc.setTextColor(80, 80, 80);
-    doc.text('Unterschrift des Fahrers:', marginL, y); y += 4;
-    if (entry.signature) {
-      doc.setDrawColor(200, 200, 200);
-      doc.setFillColor(252, 252, 252);
-      doc.roundedRect(marginL, y, 85, 32, 2, 2, 'FD');
-      try { doc.addImage(entry.signature, 'PNG', marginL + 2, y + 2, 81, 28); } catch(e) {}
-      y += 36;
-    } else {
-      doc.setDrawColor(200, 200, 200);
-      doc.rect(marginL, y, 85, 18, 'D');
-      y += 22;
-    }
-
-    // Footer
-    doc.setFillColor(245, 166, 35);
-    doc.rect(0, 287, pageW, 10, 'F');
-    doc.setFontSize(7); doc.setFont('helvetica', 'normal');
-    doc.setTextColor(255, 255, 255);
-    doc.text('my Fleet app  |  Automatisch generierter Bericht  |  ' + new Date().toLocaleDateString('de-DE'), pageW / 2, 293, { align: 'center' });
-
-    lastPDFBlob = doc.output('blob');
-  lastPDFBase64 = doc.output('datauristring');
-  } catch(e) { console.warn('PDF error', e); lastPDFBlob = null; lastPDFBase64 = null; }
-}
-
-async function generatePODPDF(entry) {
-  try {
-    const { jsPDF } = window.jspdf;
-    // Each image = one full A4 page
-    
-    
-
-    // Cover page
-    doc.setFillColor(26, 122, 191);
-    doc.rect(0, 0, pageW, 18, 'F');
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 18, pageW, pageH - 18, 'F');
-
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(22);
-    doc.setTextColor(255, 255, 255);
-    doc.text('POD – Liefernachweis', 15, 12);
-
-    doc.setFontSize(11); doc.setFont('helvetica', 'normal');
-    doc.setTextColor(30, 30, 30);
-    
-    doc.setFillColor(245, 247, 250); doc.setDrawColor(220, 220, 220);
-    doc.roundedRect(12, y, pageW - 24, 28, 2, 2, 'FD');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(100, 100, 100);
-    doc.text('Fahrer:', 16, y + 7);
-    doc.text('Datum:', 16, y + 14);
-    doc.text('Anzahl Belege:', 16, y + 21);
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(20, 20, 20);
-    doc.text(entry.driverName, 50, y + 7);
-    doc.text(new Date(entry.timestamp).toLocaleString('de-DE'), 50, y + 14);
-    doc.text(String(entry.photos ? entry.photos.length : 0), 50, y + 21);
-
-    if (entry.remarks) {
-      y += 32;
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
-      doc.text('Bemerkung: ' + entry.remarks, 14, y);
-    }
-
-    // One full page per photo - clean scan look
-    if (entry.photos && entry.photos.length > 0) {
-      for (let i = 0; i < entry.photos.length; i++) {
-        doc.addPage();
-        // White background
-        doc.setFillColor(255, 255, 255);
-        doc.rect(0, 0, pageW, pageH, 'F');
-        // Thin header
-        doc.setFillColor(26, 122, 191);
-        doc.rect(0, 0, pageW, 8, 'F');
-        doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(255,255,255);
-        doc.text('my Fleet app  |  POD  |  ' + entry.driverName + '  |  Beleg ' + (i+1) + ' von ' + entry.photos.length, 5, 5.5);
-
-        // Full page image (with small margin)
-        
-        
-        
-        try {
-          doc.addImage(entry.photos[i], 'JPEG', margin, 10, imgW, imgH);
-        } catch(e) {
-          try { doc.addImage(entry.photos[i], 'PNG', margin, 10, imgW, imgH); } catch(e2) {
-            doc.setTextColor(150,150,150); doc.setFontSize(10);
-            doc.text('Bild konnte nicht geladen werden', pageW/2, pageH/2, { align: 'center' });
-          }
-        }
-      }
-    }
-
-    // Footer on cover page only
-    doc.setPage(1);
-    doc.setFillColor(26, 122, 191);
-    doc.rect(0, 287, pageW, 10, 'F');
-    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(255,255,255);
-    doc.text('my Fleet app  |  POD Bericht  |  ' + new Date().toLocaleDateString('de-DE') + '  |  NM-IT Solutions GmbH', pageW/2, 293, { align: 'center' });
-
-    lastPDFBlob = doc.output('blob');
-    lastPDFBase64 = doc.output('datauristring');
-
-    // Run OCR separately and store result (not in PDF)
-    if (entry.photos && entry.photos.length > 0) {
-      entry._ocrTexts = [];
-      for (let i = 0; i < entry.photos.length; i++) {
-        try {
-          
-          
-          
-          
-          if (text.length > 5) entry._ocrTexts.push(text);
-        } catch(e) { /* skip */ }
-      }
-    }
-
-  } catch(e) { console.warn('PDF error', e); lastPDFBlob = null; lastPDFBase64 = null; }
-}
 
 
-function downloadLastPDF() {
-  if (!lastPDFBlob) { showToast('⚠️ PDF nicht verfügbar', 'error'); return; }
-  
-  
-  a.href = url; a.download = 'my Fleet app_Bericht_' + Date.now() + '.pdf';
-  a.click(); URL.revokeObjectURL(url);
-}
 
-// ─── ADMIN ────────────────────────────────────────────────────────
-function refreshAdmin() {
-  
-  
-  
-  
-  document.getElementById('stat-fahrer').textContent = active;
-  document.getElementById('stat-checks').textContent = checksToday;
-  document.getElementById('stat-pods').textContent = DB.pods.length;
-  document.getElementById('stat-maengel').textContent = maengel;
-  populateFilterDropdowns();
-  // Show/hide admin menu buttons based on modules
-  const adminModuleMap = {
-    abfahrt: 'menu-btn-kontrollen',
-    pod: 'menu-btn-pods',
-    nachrichten: ['menu-btn-nachrichten','menu-btn-fahrermsgs'],
-    fuhrpark: 'menu-btn-fuhrpark'
-  };
-  Object.entries(adminModuleMap).forEach(([mod, btnIds]) => {
-    const ids = Array.isArray(btnIds) ? btnIds : [btnIds];
-    ids.forEach(id => {
-      const btn = document.getElementById(id);
-      if (btn) btn.style.display = hasModule(mod) ? 'flex' : 'none';
-    });
-  });
-  adminNav('dashboard');
-}
 
-function renderFuhrpark() {
-  // Placeholder - full implementation in next phase
-}
 
 
 
-function adminNav(name) {
-  closeAdminMenu();
-  
-  views.forEach(v => {
-    
-    if (el) el.style.display = v === name ? 'block' : 'none';
-  });
-  // FAB only for fahrer
-  
-  if (fab) fab.style.display = name === 'fahrer' ? 'flex' : 'none';
-  // Breadcrumb
-  
-  
-  
-  if (sub && txt) {
-    if (name === 'dashboard') { sub.style.display='none'; }
-    else { sub.style.display='inline'; txt.textContent = labels[name] || name; }
-  }
-  // Render content
-  if (name === 'fahrer') renderFahrerList(DB.drivers);
-  if (name === 'kontrollen') { populateFilterDropdowns(); renderKontrollen(); }
-  if (name === 'pods') { populateFilterDropdowns(); renderPODs(); }
-  if (name === 'nachrichten') { populateFilterDropdowns(); renderSentNotifs(); }
-  if (name === 'fahrermsgs') renderFahrerMsgs();
-  if (name === 'fuhrpark') renderFuhrpark();
-  if (name === 'dashboard') renderAdminDashboard();
-  // Scroll to top
-  
-  if (pc) pc.scrollTop = 0;
-}
+// ─── ADMIN ────────────────────────────────────────────────────────
+
+
+
+
+
+
+
 
 // Keep adminTab as alias for backward compatibility
-function adminTab(name) { adminNav(name); }
-
-function toggleAdminMenu() {
-  
-  if (overlay) overlay.style.display = overlay.style.display === 'none' ? 'flex' : 'none';
-}
-
-function closeAdminMenu() {
-  
-  if (overlay) overlay.style.display = 'none';
-}
-
-function renderAdminDashboard() {
-  // Show/hide quick actions based on modules
-  
-  Object.entries(qaMap).forEach(([mod, id]) => {
-    
-    if (el) el.style.display = hasModule(mod) ? 'flex' : 'none';
-  });
-  // Driver activity
-  
-  if (actList) {
-    
-    if (active.length === 0) { actList.innerHTML = '<p class="text-muted" style="font-size:13px;padding:8px 0">Keine aktiven Fahrer</p>'; }
-    else {
-      actList.innerHTML = active.map(d => {
-        
-        
-        
-        return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:#fff;flex-shrink:0">${d.vorname[0]}${d.nachname[0]}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:13px">${d.vorname} ${d.nachname}</div>
-            <div style="font-size:11px;color:var(--muted)">${lastActivity ? 'Zuletzt: ' + new Date(lastActivity.timestamp).toLocaleDateString('de-DE') : 'Noch keine Aktivität'}</div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <div style="text-align:center;background:var(--surface2);border-radius:8px;padding:4px 8px">
-              <div style="font-weight:700;font-size:13px;color:var(--green)">${dChecks}</div>
-              <div style="font-size:10px;color:var(--muted)">Ktrl</div>
-            </div>
-            <div style="text-align:center;background:var(--surface2);border-radius:8px;padding:4px 8px">
-              <div style="font-weight:700;font-size:13px;color:var(--blue)">${dPods}</div>
-              <div style="font-size:10px;color:var(--muted)">POD</div>
-            </div>
-          </div>
-        </div>`;
-      }).join('');
-    }
-  }
-  // Weekly chart
-  renderWeeklyChart();
-  // Donut charts
-  renderDonutCharts();
-}
 
 
 
-function renderDonutCharts() {
-  if (typeof Chart === 'undefined') return;
-  const podsOffen = DB.pods.filter(p => p.status !== 'bearbeitet').length;
-  const podsBearbeitet = DB.pods.filter(p => p.status === 'bearbeitet').length;
-  const checksOffen = DB.checks.filter(c => c.status !== 'bearbeitet').length;
-  const checksBearbeitet = DB.checks.filter(c => c.status === 'bearbeitet').length;
-  const msgsUnread = DB.notifications.filter(n => !n.read).length;
-  const msgsRead = DB.notifications.filter(n => n.read).length;
-
-  const donutOpts = (labels, data, colors) => ({
-    type: 'doughnut',
-    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0, hoverOffset: 4 }] },
-    options: {
-      responsive: true, cutout: '70%',
-      plugins: { legend: { position: 'bottom', labels: { color: '#5a7a96', font: { size: 10 }, boxWidth: 10, padding: 8 } } }
-    }
-  });
-
-  const c1 = document.getElementById('chart-pod-status');
-  const c2 = document.getElementById('chart-check-status');
-  const c3 = document.getElementById('chart-msg-status');
-  if (c1) { if (donutPOD) donutPOD.destroy(); donutPOD = new Chart(c1, donutOpts(['Offen','Bearbeitet'],[podsOffen,podsBearbeitet],['#e8891a','#1e9e57'])); }
-  if (c2) { if (donutCheck) donutCheck.destroy(); donutCheck = new Chart(c2, donutOpts(['Offen','Bearbeitet'],[checksOffen,checksBearbeitet],['#d93025','#1a7abf'])); }
-  if (c3) { if (donutMsg) donutMsg.destroy(); donutMsg = new Chart(c3, donutOpts(['Ungelesen','Gelesen'],[msgsUnread,msgsRead],['#9b59b6','#5a7a96'])); }
-}
-
-function renderWeeklyChart() {
-  const canvas = document.getElementById('chart-weekly');
-  if (!canvas || typeof Chart === 'undefined') return;
-  // Build last 7 days data
-  
-  
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    
-    days.push(d.toLocaleDateString('de-DE', { weekday: 'short' }));
-    checksData.push(DB.checks.filter(c => new Date(c.timestamp).toDateString() === dateStr).length);
-    podsData.push(DB.pods.filter(p => new Date(p.timestamp).toDateString() === dateStr).length);
-  }
-  if (adminWeeklyChart) adminWeeklyChart.destroy();
-  adminWeeklyChart = new Chart(canvas, {
-    type: 'bar',
-    data: {
-      labels: days,
-      datasets: [
-        { label: 'Kontrollen', data: checksData, backgroundColor: 'rgba(26,122,191,0.8)', borderRadius: 6 },
-        { label: 'PODs', data: podsData, backgroundColor: 'rgba(59,130,246,0.5)', borderRadius: 6 }
-      ]
-    },
-    options: {
-      responsive: true,
-      plugins: { legend: { labels: { color: getComputedStyle(document.body).getPropertyValue('--text') || '#1a2533', font: { size: 11 } } } },
-      scales: {
-        x: { ticks: { color: '#5a7a96', font: { size: 11 } }, grid: { display: false } },
-        y: { ticks: { color: '#5a7a96', font: { size: 11 }, stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.05)' }, beginAtZero: true }
-      }
-    }
-  });
-}
-
-function renderFahrerList(drivers) {
-  
-  list.innerHTML = '';
-  if (drivers.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine Fahrer gefunden</p>'; return; }
-  
-  card.className = 'list-card';
-  drivers.forEach(d => {
-    
-    item.className = 'list-item';
-    item.innerHTML = `
-      <div class="list-avatar">${d.vorname[0]}${d.nachname[0]}</div>
-      <div class="list-info">
-        <div class="list-name">${d.vorname} ${d.nachname}</div>
-        <div class="list-meta">${d.username} · ${d.email}</div>
-      </div>
-      <div class="status-dot ${d.status}"></div>
-    `;
-    item.onclick = () => openEditDriver(d);
-    card.appendChild(item);
-  });
-  list.appendChild(card);
-}
-
-function filterFahrer(q) {
-  const filtered = DB.drivers.filter(d =>
-    (d.vorname + ' ' + d.nachname + ' ' + d.username).toLowerCase().includes(q.toLowerCase())
-  );
-  renderFahrerList(filtered);
-}
-
-function populateFilterDropdowns() {
-  ['filter-check-fahrer','filter-pod-fahrer','notif-recipient'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const prevVal = el.value;
-    while (sel.options.length > 1) sel.remove(1);
-    DB.drivers.forEach(d => {
-      
-      opt.value = d.id; opt.textContent = d.vorname + ' ' + d.nachname;
-      sel.appendChild(opt);
-    });
-    sel.value = current;
-  });
-}
-
-function openAddDriver() {
-  document.getElementById('modal-fahrer-title').textContent = 'Fahrer anlegen';
-  document.getElementById('modal-fahrer-id').value = '';
-  ['f-vorname','f-nachname','f-email','f-user','f-pass','f-email1','f-email2','f-werkstatt'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('f-status').value = 'active';
-  document.getElementById('delete-driver-btn').classList.add('hidden');
-  document.getElementById('show-qr-btn').style.display = 'none';
-  document.getElementById('driver-qr-container').style.display = 'none';
-  openModal('modal-fahrer');
-}
-
-function openEditDriver(d) {
-  document.getElementById('modal-fahrer-title').textContent = 'Fahrer bearbeiten';
-  document.getElementById('modal-fahrer-id').value = d.id;
-  document.getElementById('f-vorname').value = d.vorname;
-  document.getElementById('f-nachname').value = d.nachname;
-  document.getElementById('f-email').value = d.email;
-  document.getElementById('f-user').value = d.username;
-  document.getElementById('f-pass').value = d.password;
-  document.getElementById('f-email1').value = d.email1 || '';
-  document.getElementById('f-email2').value = d.email2 || '';
-  document.getElementById('f-werkstatt').value = d.werkstatt || '';
-  document.getElementById('show-qr-btn').style.display = 'flex';
-  document.getElementById('driver-qr-container').style.display = 'none';
-  document.getElementById('f-status').value = d.status;
-  document.getElementById('delete-driver-btn').classList.remove('hidden');
-  openModal('modal-fahrer');
-}
 
 
-function deleteDriver() {
-  
-  if (!id) return;
-  if (!confirm('Fahrer wirklich löschen?')) return;
-  
-  DB.drivers.splice(idx, 1);
-  if (firebaseDB) firebaseDB.ref('drivers/' + id).remove();
-  saveDriversToLocal();
-  showToast('🗑 Fahrer gelöscht', 'success');
-  closeModal('modal-fahrer');
-  refreshAdmin();
-}
 
-function renderKontrollen() {
-  
-  list.innerHTML = '';
-  
-  
-  
-  
-  if (fDriver) checks = checks.filter(c => c.driverId === fDriver);
-  if (fDate) checks = checks.filter(c => c.timestamp && c.timestamp.startsWith(fDate));
-  if (fMaengel === 'maengel') checks = checks.filter(c => c.answers && c.answers.some(a => a.answer === 'nein'));
-  if (fMaengel === 'ok') checks = checks.filter(c => c.answers && c.answers.every(a => a.answer !== 'nein'));
-  if (checks.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine Einträge gefunden</p>'; return; }
-  checks.forEach(c => {
-    
-    
-    card.className = 'report-card';
-    card.style.cursor = 'pointer';
-    
-    
-    card.innerHTML = `
-      <div class="report-top">
-        <div class="report-driver">${c.driverName}</div>
-        <div class="report-date">${new Date(c.timestamp).toLocaleString('de-DE')}</div>
-      </div>
-      <div class="report-status">
-        <div class="chip ok">✅ ${c.answers ? c.answers.filter(a=>a.answer!=='nein').length : 0} OK</div>
-        ${maengel > 0 ? `<div class="chip warn">⚠️ ${maengel} Mängel</div>` : ''}
-        <div class="chip" style="color:${statusColor};border-color:${statusColor}40">${statusLabel}</div>
-        ${c.offline ? '<div class="sync-badge">Offline</div>' : ''}
-      </div>
-    `;
-    card.onclick = () => openKontrolleDetail(c);
-    list.appendChild(card);
-  });
-}
 
-function openKontrolleDetail(c) {
-  currentCheckForStatus = c;
-  
-  
-  
-  cont.innerHTML = `
-    <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;font-family:monospace;color:var(--muted)">
-      Vorgang-ID: <strong style="color:var(--accent)">${p.vorgangId || p.id}</strong>
-      ${p.mandantId ? ' · Mandant: <strong>' + p.mandantId + '</strong>' : ''}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div style="background:var(--surface2);border-radius:10px;padding:10px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Fahrer</div>
-        <div style="font-weight:700;font-size:14px">${c.driverName}</div>
-      </div>
-      <div style="background:var(--surface2);border-radius:10px;padding:10px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Datum</div>
-        <div style="font-weight:700;font-size:12px">${new Date(c.timestamp).toLocaleString('de-DE')}</div>
-      </div>
-      <div style="background:rgba(30,158,87,0.1);border-radius:10px;padding:10px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">In Ordnung</div>
-        <div style="font-weight:700;font-size:18px;color:var(--green)">${ok}</div>
-      </div>
-      <div style="background:${maengel>0?'rgba(217,48,37,0.1)':'rgba(30,158,87,0.1)'};border-radius:10px;padding:10px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Mängel</div>
-        <div style="font-weight:700;font-size:18px;color:${maengel>0?'var(--red)':'var(--green)'}">${maengel}</div>
-      </div>
-    </div>
-    <div class="divider"></div>
-    ${c.answers ? c.answers.map((a,i) => {
-      
-      
-      return `<div style="margin-bottom:10px;padding:10px;background:${isOk?'var(--surface2)':'rgba(217,48,37,0.06)'};border-radius:10px;border-left:3px solid ${isOk?'var(--green)':'var(--red)'}">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:4px">${i+1}. ${a.question}</div>
-        <div style="font-weight:700;font-size:13px;color:${isOk?'var(--green)':'var(--red)'}">
-          ${isOk ? '✅ Ja / In Ordnung' : '❌ Nein / Mängel'}
-        </div>
-        ${a.remark ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;padding:4px 8px;background:var(--surface);border-radius:6px">→ ${a.remark}</div>` : ''}
-        ${validPhotos.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${validPhotos.map(p => `<img src="${p}" style="width:70px;height:70px;border-radius:8px;object-fit:cover;border:1px solid var(--border)">`).join('')}</div>` : ''}
-        ${!isOk && a.photoCount > 0 && validPhotos.length === 0 ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">📷 ${a.photoCount} Foto(s) – im Fahrer-PDF verfügbar</div>` : ''}
-      </div>`;
-    }).join('') : ''}
-    ${c.signature && c.signature !== 'sig_present' && c.signature.startsWith('data:') ? 
-      `<div class="divider"></div>
-       <p style="font-size:12px;color:var(--muted);margin-bottom:6px">Unterschrift des Fahrers:</p>
-       <img src="${c.signature}" style="max-width:220px;border-radius:8px;border:1px solid var(--border);background:#fff">` : 
-      c.signature ? `<div class="divider"></div><p style="font-size:12px;color:var(--muted)">✅ Unterschrift vorhanden (im PDF)</p>` : ''}
-  `;
-  openModal('modal-kontrolle');
-}
 
-function renderPODs() {
-  const list = document.getElementById('pods-list');
-  if (!list) return;
-  list.innerHTML = '';
-  const fDriver = document.getElementById('filter-pod-fahrer') ? document.getElementById('filter-pod-fahrer').value : '';
-  const fDate = document.getElementById('filter-pod-date') ? document.getElementById('filter-pod-date').value : '';
-  const fSearchEl = document.getElementById('filter-pod-search');
-  const fSearch = fSearchEl ? fSearchEl.value.trim().toLowerCase() : '';
-  let pods = [...DB.pods].reverse();
-  if (fDriver) pods = pods.filter(p => p.driverId === fDriver);
-  if (fDate) pods = pods.filter(p => p.timestamp && p.timestamp.startsWith(fDate));
-  if (fSearch) pods = pods.filter(p => {
-    const searchIn = [
-      p.driverName || '',
-      p.remarks || '',
-      p.ocrText || '',
-      new Date(p.timestamp).toLocaleString('de-DE')
-    ].join(' ').toLowerCase();
-    return searchIn.includes(fSearch);
-  });
-  if (pods.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine PODs gefunden</p>'; return; }
-  pods.forEach(p => {
-    
-    card.className = 'report-card';
-    card.style.cursor = 'pointer';
-    
-    
-    card.innerHTML = `
-      <div class="report-top">
-        <div class="report-driver">${p.driverName}</div>
-        <div class="report-date">${new Date(p.timestamp).toLocaleString('de-DE')}</div>
-      </div>
-      <div class="report-status" style="margin-top:6px">
-        <div class="chip ok">📷 ${photoCount} Beleg(e)</div>
-        ${p.remarks ? `<div class="chip">💬 ${p.remarks.substring(0,30)}</div>` : ''}
-        ${p.ocrText ? `<div class="chip" style="color:var(--blue)">🔍 OCR</div>` : ''}
-        <div class="chip" style="color:${p.status==='bearbeitet'?'var(--green)':'var(--accent)'};border-color:${p.status==='bearbeitet'?'var(--green)':'var(--accent)'}40">${p.status==='bearbeitet'?'✅ Bearbeitet':'🔄 Offen'}</div>
-        ${p.offline ? '<div class="sync-badge">Offline</div>' : ''}
-      </div>
-      ${ocrPreview ? `<div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;padding:6px 8px;background:var(--surface2);border-radius:6px">${ocrPreview}</div>` : ''}
-    `;
-    card.onclick = () => openPODDetail(p);
-    list.appendChild(card);
-  });
-}
 
-function openPODDetail(p) {
-  currentPODForForward = p;
-  document.getElementById('pod-forward-wrap').style.display = 'none';
-  
-  
-  
-  // Check if photos are real base64 or placeholder strings
-  
-  cont.innerHTML = `
-    <div style="background:var(--surface2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;font-family:monospace;color:var(--muted)">
-      Vorgang-ID: <strong style="color:var(--accent)">${p.vorgangId || p.id}</strong>
-      ${p.mandantId ? ' · Mandant: <strong>' + p.mandantId + '</strong>' : ''}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div style="background:var(--surface2);border-radius:10px;padding:10px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Fahrer</div>
-        <div style="font-weight:700;font-size:14px">${p.driverName}</div>
-      </div>
-      <div style="background:var(--surface2);border-radius:10px;padding:10px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Datum</div>
-        <div style="font-weight:700;font-size:13px">${new Date(p.timestamp).toLocaleString('de-DE')}</div>
-      </div>
-      <div style="background:var(--surface2);border-radius:10px;padding:10px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Anzahl Belege</div>
-        <div style="font-weight:700;font-size:14px">${photoCount}</div>
-      </div>
-      ${p.remarks ? `<div style="background:var(--surface2);border-radius:10px;padding:10px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:2px">Bemerkung</div>
-        <div style="font-size:13px">${p.remarks}</div>
-      </div>` : ''}
-    </div>
-    ${p.ocrText ? `
-    <div style="background:rgba(26,122,191,0.08);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">🔍 OCR – Erkannter Text aus Belegen</div>
-      <div style="font-size:12px;color:var(--text);line-height:1.7;white-space:pre-wrap">${p.ocrText.substring(0, 600)}</div>
-    </div>` : ''}
-    <div class="divider"></div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Eingescannte Belege (${photoCount}):</p>
-    ${validPhotos.length > 0 ? `
-    <div style="display:flex;flex-direction:column;gap:10px">
-      ${validPhotos.map((ph, i) => `
-        <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
-          <div style="padding:5px 10px;font-size:11px;color:var(--muted);background:var(--surface2)">Beleg ${i+1}</div>
-          <img src="${ph}" style="width:100%;max-height:400px;object-fit:contain;display:block;background:#fff">
-        </div>`).join('')}
-    </div>` : `
-    <div style="background:var(--surface2);border-radius:10px;padding:16px;text-align:center">
-      <div style="font-size:24px;margin-bottom:8px">📄</div>
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px">${photoCount} Beleg(e) übermittelt</div>
-      <div style="font-size:12px;color:var(--muted)">Vorschaubilder werden beim nächsten Upload gespeichert.<br>OCR-Text oben verfügbar.</div>
-    </div>`}
-  `;
-  openModal('modal-pod');
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────────
-function previewNotifAttachment(event) {
-  
-  
-  if (!file) { preview.innerHTML = ''; return; }
-  preview.innerHTML = `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;display:flex;align-items:center;gap:8px">
-    <span>${file.type.includes('pdf') ? '📄' : '🖼️'}</span>
-    <span style="flex:1">${file.name}</span>
-    <span style="color:var(--muted)">${(file.size/1024).toFixed(0)} KB</span>
-    <button onclick="document.getElementById('notif-attachment').value='';document.getElementById('notif-attachment-preview').innerHTML=''" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px">×</button>
-  </div>`;
-}
 
-async function sendNotification() {
-  
-  
-  if (!msg) { showToast('⚠️ Bitte Nachricht eingeben', 'error'); return; }
 
-  
 
-  // Upload attachment if present
-  
-  if (fileInput && fileInput.files[0] && firebaseStorage) {
-    showToast('⏳ Anhang wird hochgeladen...', '');
-    
-    
-    if (result) {
-      newNotif.attachment = result.url;
-      newNotif.attachmentName = result.name;
-      newNotif.attachmentType = result.type;
-    }
-    fileInput.value = '';
-    document.getElementById('notif-attachment-preview').innerHTML = '';
-  }
 
-  if (firebaseDB) {
-    
-    firebaseDB.ref('mandanten/' + nmid + '/notifications/' + newNotif.id).set(newNotif);
-  } else {
-    DB.notifications.push(newNotif);
-    saveNotificationsToStorage();
-  }
-  document.getElementById('notif-message').value = '';
-  showToast('📨 Nachricht gesendet', 'success');
-  renderSentNotifs();
-}
 
-function renderSentNotifs() {
-  
-  list.innerHTML = '';
-  [...DB.notifications].reverse().forEach(n => {
-    
-    
-    card.className = 'report-card';
-    card.innerHTML = `
-      <div class="report-top">
-        <div class="report-driver">→ ${toLabel}</div>
-        <div class="report-date">${new Date(n.timestamp).toLocaleString('de-DE')}</div>
-      </div>
-      <div style="font-size:14px;color:var(--text);line-height:1.5;margin-top:6px">${n.message}</div>
-      <div class="mt-8"><span class="chip ${n.read ? 'ok' : 'warn'}">${n.read ? '✅ Gelesen' : '⏳ Ungelesen'}</span></div>
-    `;
-    list.appendChild(card);
-  });
-  if (DB.notifications.length === 0) list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine Nachrichten</p>';
-}
 
-function renderDriverNotifs() {
-  
-  list.innerHTML = '';
-  
-  if (myNotifs.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:40px 20px">Keine Nachrichten</p>'; return; }
-  [...myNotifs].reverse().forEach(n => {
-    
-    card.className = 'notif-card' + (n.read ? ' read' : '');
-    card.innerHTML = `
-      <div class="notif-header">
-        <span class="notif-from">Von: ${n.from}</span>
-        <span class="notif-time">${new Date(n.timestamp).toLocaleString('de-DE')}</span>
-      </div>
-      <div class="notif-msg">${n.message}</div>
-      ${!n.read ? `<button class="btn btn-green btn-sm" onclick="markRead('${n.id}',this)">✅ Als gelesen markieren</button>` : '<span style="font-size:12px;color:var(--muted)">✅ Gelesen</span>'}
-    `;
-    list.appendChild(card);
-  });
-}
 
-function markRead(id, btn) {
-  
-  if (n) {
-    n.read = true;
-    if (firebaseDB) {  firebaseDB.ref('mandanten/' + rmid + '/notifications/' + id + '/read').set(true); }
-    else saveNotificationsToStorage();
-  }
-  btn.parentElement.classList.add('read');
-  btn.parentElement.querySelector('.notif-msg').style.opacity = '0.6';
-  btn.replaceWith(document.createTextNode('✅ Gelesen'));
-  // Update badge
-  
-  
-  if (myUnread.length > 0) { badge.style.display='flex'; badge.textContent = myUnread.length; }
-  else { badge.style.display='none'; }
-}
 
-function showDriverNotifs() { goTo('screen-driver-notifs'); }
+
+
+
 
 // ─── MODAL HELPERS ────────────────────────────────────────────────
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+
 document.querySelectorAll('.modal-overlay').forEach(m => {
   m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); });
 });
 
 // ─── PHOTO TRIGGER ────────────────────────────────────────────────
-function triggerPhotoUpload(inputId) { document.getElementById(inputId).click(); }
+
 
 // ─── TOAST ────────────────────────────────────────────────────────
 
-function showToast(msg, type = '') {
-  
-  t.textContent = msg;
-  t.className = 'toast show ' + type;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
-}
+
 
 // ─── INIT ────────────────────────────────────────────────────────
 document.addEventListener('keypress', e => {
