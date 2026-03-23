@@ -651,6 +651,24 @@
       <button class="btn btn-primary btn-sm" onclick="openAddMandant()">+ Neu</button>
     </div>
     <div id="mandanten-list"></div>
+
+    <!-- Passwort ändern -->
+    <div style="margin-top:20px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px">🔐 Mein Passwort ändern</div>
+      <div class="form-group">
+        <label>Aktuelles Passwort</label>
+        <input type="password" id="sa-pass-current" placeholder="••••••••">
+      </div>
+      <div class="form-group">
+        <label>Neues Passwort</label>
+        <input type="password" id="sa-pass-new" placeholder="Mindestens 8 Zeichen">
+      </div>
+      <div class="form-group">
+        <label>Neues Passwort wiederholen</label>
+        <input type="password" id="sa-pass-confirm" placeholder="••••••••">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="changeSAPassword()">🔐 Passwort ändern</button>
+    </div>
   </div>
 </div>
 
@@ -1946,6 +1964,28 @@ function generateMandantId(type) {
   
   const num = String(existing.length + 1).padStart(4, '0');
   return `${prefix}-${num}`;
+}
+
+function changeSAPassword() {
+  const current = document.getElementById('sa-pass-current').value;
+  const newPass = document.getElementById('sa-pass-new').value;
+  const confirm = document.getElementById('sa-pass-confirm').value;
+  if (!current || !newPass || !confirm) { showToast('⚠️ Bitte alle Felder ausfüllen', 'error'); return; }
+  if (current !== currentUser.password) { showToast('❌ Aktuelles Passwort falsch', 'error'); return; }
+  if (newPass.length < 8) { showToast('⚠️ Passwort muss mindestens 8 Zeichen haben', 'error'); return; }
+  if (newPass !== confirm) { showToast('❌ Passwörter stimmen nicht überein', 'error'); return; }
+  // Update in DB
+  const idx = DB.superadmins.findIndex(sa => sa.id === currentUser.id);
+  if (idx >= 0) {
+    DB.superadmins[idx].password = newPass;
+    currentUser.password = newPass;
+    // Save to Firebase
+    if (firebaseDB) firebaseDB.ref('superadmins/' + currentUser.id + '/password').set(newPass);
+  }
+  document.getElementById('sa-pass-current').value = '';
+  document.getElementById('sa-pass-new').value = '';
+  document.getElementById('sa-pass-confirm').value = '';
+  showToast('✅ Passwort erfolgreich geändert!', 'success');
 }
 
 function refreshSuperAdmin() {
@@ -4000,8 +4040,8 @@ function doLogin() {
     currentUser = sa; currentRole = 'superadmin';
     goTo('screen-superadmin'); refreshSuperAdmin(); return;
   }
-  // Also check if username exactly matches a superadmin
-  const directSA = DB.superadmins.find(a => a.username === u && a.password === p);
+  // Also check if username exactly matches a superadmin (case-insensitive)
+  const directSA = DB.superadmins.find(a => a.username.toLowerCase() === u.toLowerCase() && a.password === p);
   if (directSA) {
     currentUser = directSA; currentRole = 'superadmin';
     goTo('screen-superadmin'); refreshSuperAdmin(); return;
