@@ -4422,6 +4422,407 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 document.addEventListener('keypress', e => {
   if (e.key === 'Enter' && document.getElementById('screen-login').classList.contains('active')) doLogin();
 });
+
+
+// ─── FEHLENDE FUNKTIONEN ──────────────────────────────────────────
+
+// Delete Mandant (nur Demo)
+function deleteMandant() {
+  const id = document.getElementById('modal-mandant-id').value;
+  const mandant = DB.mandanten.find(m => m.id === id);
+  if (!mandant) return;
+  if (mandant.type !== 'demo') {
+    showToast('⛔ Live-Mandanten können nicht gelöscht werden!', 'error'); return;
+  }
+  if (!confirm('Demo-Mandant "' + mandant.name + '" wirklich löschen?')) return;
+  const idx = DB.mandanten.findIndex(m => m.id === id);
+  DB.mandanten.splice(idx, 1);
+  if (firebaseDB) firebaseDB.ref('mandanten/' + id).remove();
+  closeModal('modal-mandant');
+  refreshSuperAdmin();
+  showToast('🗑 Demo-Mandant gelöscht', 'success');
+}
+
+// Questions Management
+function addQuestion() {
+  const list = document.getElementById('m-questions-list');
+  if (!list) return;
+  const count = list.children.length + 1;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:6px';
+  row.innerHTML = `
+    <span style="font-size:11px;color:var(--muted);min-width:20px;text-align:right">${count}.</span>
+    <input type="text" class="mandant-question-input" placeholder="Neue Frage..."
+      style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-size:12px">
+    <button onclick="this.parentElement.remove();renumberQuestions()" 
+      style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:0 4px">×</button>
+  `;
+  list.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function renumberQuestions() {
+  const rows = document.querySelectorAll('#m-questions-list > div');
+  rows.forEach((row, i) => {
+    const num = row.querySelector('span');
+    if (num) num.textContent = (i+1) + '.';
+  });
+}
+
+function resetQuestionsToDefault() {
+  if (!confirm('Alle Fragen auf Standard zurücksetzen?')) return;
+  renderMandantQuestions(DEFAULT_QUESTIONS);
+  showToast('✅ Standard-Fragen wiederhergestellt', 'success');
+}
+
+function saveQuestions() {
+  const inputs = document.querySelectorAll('.mandant-question-input');
+  const questions = Array.from(inputs).map(i => i.value.trim()).filter(q => q.length > 0);
+  if (questions.length === 0) { showToast('⚠️ Mindestens eine Frage erforderlich', 'error'); return; }
+  const id = document.getElementById('modal-mandant-id').value;
+  if (id) {
+    const mandant = DB.mandanten.find(m => m.id === id);
+    if (mandant) {
+      mandant.questions = questions;
+      if (firebaseDB) firebaseDB.ref('mandanten/' + id + '/info/questions').set(questions);
+      showToast('✅ Fragen gespeichert (' + questions.length + ')', 'success');
+    }
+  }
+}
+
+// ─── FUHRPARK VERWALTUNG ──────────────────────────────────────────
+
+function fuhrparkTab(name) {
+  ['fahrzeuge','termine','kalender'].forEach(t => {
+    const el = document.getElementById('fp-tab-' + t);
+    if (el) el.style.display = t === name ? 'block' : 'none';
+  });
+  document.querySelectorAll('.fp-tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === name);
+  });
+  if (name === 'kalender') renderKalender();
+  if (name === 'termine') renderTermine();
+  if (name === 'fahrzeuge') renderFahrzeuge();
+}
+
+function openAddFahrzeug() {
+  document.getElementById('modal-fahrzeug-id').value = '';
+  document.getElementById('modal-fahrzeug-title').textContent = 'Fahrzeug anlegen';
+  ['fz-kennzeichen','fz-typ','fz-marke','fz-baujahr','fz-tuev','fz-asp','fz-hu'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('delete-fahrzeug-btn').style.display = 'none';
+  const extraFields = document.getElementById('fz-extra-fields');
+  if (extraFields) extraFields.innerHTML = '';
+  openModal('modal-fahrzeug');
+}
+
+function saveFahrzeug() {
+  const id = document.getElementById('modal-fahrzeug-id').value;
+  const kennzeichen = document.getElementById('fz-kennzeichen').value.trim();
+  if (!kennzeichen) { showToast('⚠️ Kennzeichen erforderlich', 'error'); return; }
+  const extraInputs = document.querySelectorAll('.fz-extra-input');
+  const extraFields = {};
+  extraInputs.forEach(inp => { if (inp.name && inp.value) extraFields[inp.name] = inp.value; });
+  const data = {
+    id: id || 'FZ-' + Date.now(),
+    kennzeichen,
+    typ: document.getElementById('fz-typ') ? document.getElementById('fz-typ').value : '',
+    marke: document.getElementById('fz-marke') ? document.getElementById('fz-marke').value.trim() : '',
+    baujahr: document.getElementById('fz-baujahr') ? document.getElementById('fz-baujahr').value : '',
+    tuev: document.getElementById('fz-tuev') ? document.getElementById('fz-tuev').value : '',
+    asp: document.getElementById('fz-asp') ? document.getElementById('fz-asp').value : '',
+    hu: document.getElementById('fz-hu') ? document.getElementById('fz-hu').value : '',
+    extraFields,
+    mandantId: currentMandant ? currentMandant.id : 'M-0001'
+  };
+  if (!DB.fahrzeuge) DB.fahrzeuge = [];
+  if (id) {
+    const idx = DB.fahrzeuge.findIndex(f => f.id === id);
+    if (idx >= 0) DB.fahrzeuge[idx] = data; else DB.fahrzeuge.push(data);
+  } else {
+    DB.fahrzeuge.push(data);
+  }
+  if (firebaseDB && currentMandant) {
+    firebaseDB.ref('mandanten/' + currentMandant.id + '/fahrzeuge/' + data.id).set(data);
+  }
+  closeModal('modal-fahrzeug');
+  renderFahrzeuge();
+  showToast('✅ Fahrzeug gespeichert', 'success');
+}
+
+function deleteFahrzeug() {
+  const id = document.getElementById('modal-fahrzeug-id').value;
+  if (!id || !confirm('Fahrzeug wirklich löschen?')) return;
+  if (!DB.fahrzeuge) return;
+  const idx = DB.fahrzeuge.findIndex(f => f.id === id);
+  if (idx >= 0) DB.fahrzeuge.splice(idx, 1);
+  if (firebaseDB && currentMandant) firebaseDB.ref('mandanten/' + currentMandant.id + '/fahrzeuge/' + id).remove();
+  closeModal('modal-fahrzeug');
+  renderFahrzeuge();
+  showToast('🗑 Fahrzeug gelöscht', 'success');
+}
+
+function addExtraFahrzeugField() {
+  const container = document.getElementById('fz-extra-fields');
+  if (!container) return;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+  row.innerHTML = `
+    <input type="text" placeholder="Feldname (z.B. Reifengröße)" 
+      style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-size:13px"
+      oninput="this.nextElementSibling.name=this.value.replace(/\s/g,'_')">
+    <input type="text" class="fz-extra-input" placeholder="Wert"
+      style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-size:13px">
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer">×</button>
+  `;
+  container.appendChild(row);
+}
+
+function renderFahrzeuge() {
+  const list = document.getElementById('fahrzeuge-list');
+  if (!list) return;
+  const fahrzeuge = (DB.fahrzeuge || []).filter(f => !currentMandant || f.mandantId === currentMandant.id);
+  if (fahrzeuge.length === 0) {
+    list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine Fahrzeuge angelegt</p>'; return;
+  }
+  const today = new Date();
+  list.innerHTML = fahrzeuge.map(f => {
+    const tuevDate = f.tuev ? new Date(f.tuev) : null;
+    const aspDate = f.asp ? new Date(f.asp) : null;
+    const tuevDays = tuevDate ? Math.ceil((tuevDate - today) / 86400000) : null;
+    const aspDays = aspDate ? Math.ceil((aspDate - today) / 86400000) : null;
+    const warn = (tuevDays !== null && tuevDays < 30) || (aspDays !== null && aspDays < 30);
+    return `<div class="report-card" style="cursor:pointer;border-left:3px solid ${warn?'var(--red)':'var(--green)'}" onclick="openEditFahrzeug('${f.id}')">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-size:24px">🚛</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:15px">${f.kennzeichen}</div>
+          <div style="font-size:12px;color:var(--muted)">${f.marke || ''} ${f.typ || ''}</div>
+          <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">
+            ${tuevDays !== null ? `<span style="font-size:11px;padding:2px 8px;border-radius:6px;background:${tuevDays<30?'rgba(217,48,37,0.1)':'rgba(30,158,87,0.1)'};color:${tuevDays<30?'var(--red)':'var(--green)'}">TÜV: ${tuevDays}d</span>` : ''}
+            ${aspDays !== null ? `<span style="font-size:11px;padding:2px 8px;border-radius:6px;background:${aspDays<30?'rgba(217,48,37,0.1)':'rgba(245,166,35,0.1)'};color:${aspDays<30?'var(--red)':'#e8891a'}">ASP: ${aspDays}d</span>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openEditFahrzeug(id) {
+  if (!DB.fahrzeuge) return;
+  const f = DB.fahrzeuge.find(v => v.id === id);
+  if (!f) return;
+  document.getElementById('modal-fahrzeug-id').value = f.id;
+  document.getElementById('modal-fahrzeug-title').textContent = 'Fahrzeug bearbeiten';
+  if (document.getElementById('fz-kennzeichen')) document.getElementById('fz-kennzeichen').value = f.kennzeichen || '';
+  if (document.getElementById('fz-typ')) document.getElementById('fz-typ').value = f.typ || '';
+  if (document.getElementById('fz-marke')) document.getElementById('fz-marke').value = f.marke || '';
+  if (document.getElementById('fz-baujahr')) document.getElementById('fz-baujahr').value = f.baujahr || '';
+  if (document.getElementById('fz-tuev')) document.getElementById('fz-tuev').value = f.tuev || '';
+  if (document.getElementById('fz-asp')) document.getElementById('fz-asp').value = f.asp || '';
+  if (document.getElementById('fz-hu')) document.getElementById('fz-hu').value = f.hu || '';
+  document.getElementById('delete-fahrzeug-btn').style.display = 'flex';
+  openModal('modal-fahrzeug');
+}
+
+// ─── TERMINE ──────────────────────────────────────────────────────
+
+function openAddTermin(datum) {
+  document.getElementById('modal-termin-id').value = '';
+  document.getElementById('modal-termin-title').textContent = 'Termin anlegen';
+  if (document.getElementById('t-datum')) document.getElementById('t-datum').value = datum || new Date().toISOString().split('T')[0];
+  ['t-bezeichnung','t-fahrzeug','t-notiz'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('delete-termin-btn').style.display = 'none';
+  openModal('modal-termin');
+}
+
+function saveTermin() {
+  const bezeichnung = document.getElementById('t-bezeichnung') ? document.getElementById('t-bezeichnung').value.trim() : '';
+  if (!bezeichnung) { showToast('⚠️ Bezeichnung erforderlich', 'error'); return; }
+  const id = document.getElementById('modal-termin-id').value || 'T-' + Date.now();
+  const data = {
+    id,
+    bezeichnung,
+    datum: document.getElementById('t-datum') ? document.getElementById('t-datum').value : '',
+    fahrzeug: document.getElementById('t-fahrzeug') ? document.getElementById('t-fahrzeug').value : '',
+    notiz: document.getElementById('t-notiz') ? document.getElementById('t-notiz').value.trim() : '',
+    mandantId: currentMandant ? currentMandant.id : 'M-0001'
+  };
+  if (!DB.termine) DB.termine = [];
+  const idx = DB.termine.findIndex(t => t.id === id);
+  if (idx >= 0) DB.termine[idx] = data; else DB.termine.push(data);
+  if (firebaseDB && currentMandant) {
+    firebaseDB.ref('mandanten/' + currentMandant.id + '/termine/' + id).set(data);
+  }
+  closeModal('modal-termin');
+  renderTermine();
+  renderKalender();
+  showToast('✅ Termin gespeichert', 'success');
+}
+
+function deleteTermin() {
+  const id = document.getElementById('modal-termin-id').value;
+  if (!id || !confirm('Termin wirklich löschen?')) return;
+  if (!DB.termine) return;
+  const idx = DB.termine.findIndex(t => t.id === id);
+  if (idx >= 0) DB.termine.splice(idx, 1);
+  if (firebaseDB && currentMandant) firebaseDB.ref('mandanten/' + currentMandant.id + '/termine/' + id).remove();
+  closeModal('modal-termin');
+  renderTermine();
+  renderKalender();
+  showToast('🗑 Termin gelöscht', 'success');
+}
+
+function renderTermine() {
+  const list = document.getElementById('termine-list');
+  if (!list) return;
+  const today = new Date();
+  const termine = (DB.termine || [])
+    .filter(t => !currentMandant || t.mandantId === currentMandant.id)
+    .sort((a,b) => new Date(a.datum) - new Date(b.datum));
+  if (termine.length === 0) {
+    list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine Termine</p>'; return;
+  }
+  list.innerHTML = termine.map(t => {
+    const d = new Date(t.datum);
+    const days = Math.ceil((d - today) / 86400000);
+    const overdue = days < 0;
+    const soon = days >= 0 && days <= 7;
+    return `<div class="report-card" style="cursor:pointer;border-left:3px solid ${overdue?'var(--red)':soon?'#e8891a':'var(--green)'}" onclick="openEditTermin('${t.id}')">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="text-align:center;background:${overdue?'rgba(217,48,37,0.1)':soon?'rgba(232,137,26,0.1)':'var(--surface2)'};border-radius:10px;padding:8px 12px;min-width:50px">
+          <div style="font-size:18px;font-weight:800;color:${overdue?'var(--red)':soon?'#e8891a':'var(--text)'}">${d.getDate()}</div>
+          <div style="font-size:10px;color:var(--muted)">${d.toLocaleDateString('de-DE',{month:'short'})}</div>
+        </div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px">${t.bezeichnung}</div>
+          ${t.fahrzeug ? `<div style="font-size:12px;color:var(--muted)">🚛 ${t.fahrzeug}</div>` : ''}
+          <div style="font-size:11px;color:${overdue?'var(--red)':soon?'#e8891a':'var(--muted)'}">${overdue?'⚠️ Überfällig':days===0?'Heute':days===1?'Morgen':'in '+days+' Tagen'}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openEditTermin(id) {
+  const t = (DB.termine || []).find(t => t.id === id);
+  if (!t) return;
+  document.getElementById('modal-termin-id').value = t.id;
+  document.getElementById('modal-termin-title').textContent = 'Termin bearbeiten';
+  if (document.getElementById('t-bezeichnung')) document.getElementById('t-bezeichnung').value = t.bezeichnung || '';
+  if (document.getElementById('t-datum')) document.getElementById('t-datum').value = t.datum || '';
+  if (document.getElementById('t-fahrzeug')) document.getElementById('t-fahrzeug').value = t.fahrzeug || '';
+  if (document.getElementById('t-notiz')) document.getElementById('t-notiz').value = t.notiz || '';
+  document.getElementById('delete-termin-btn').style.display = 'flex';
+  openModal('modal-termin');
+}
+
+// ─── KALENDER ─────────────────────────────────────────────────────
+let kalenderDate = new Date();
+
+function renderKalender() {
+  const cal = document.getElementById('kalender-grid');
+  if (!cal) return;
+  const year = kalenderDate.getFullYear();
+  const month = kalenderDate.getMonth();
+  const monthName = kalenderDate.toLocaleDateString('de-DE', {month:'long', year:'numeric'});
+  const header = document.getElementById('kalender-header');
+  if (header) header.textContent = monthName;
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month+1, 0);
+  const startDow = (firstDay.getDay() + 6) % 7; // Monday=0
+  const termine = (DB.termine || []).filter(t => !currentMandant || t.mandantId === currentMandant.id);
+  let html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">';
+  ['Mo','Di','Mi','Do','Fr','Sa','So'].forEach(d => {
+    html += `<div style="text-align:center;font-size:11px;font-weight:700;color:var(--muted);padding:4px">${d}</div>`;
+  });
+  for (let i = 0; i < startDow; i++) html += '<div></div>';
+  const today = new Date();
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dayTermine = termine.filter(t => t.datum === dateStr);
+    const isToday = today.getDate()===d && today.getMonth()===month && today.getFullYear()===year;
+    html += `<div onclick="openAddTermin('${dateStr}')" style="min-height:44px;padding:4px;border-radius:8px;cursor:pointer;background:${isToday?'rgba(26,122,191,0.15)':'var(--surface2)'};border:1px solid ${isToday?'var(--accent)':'var(--border)'}">
+      <div style="font-size:12px;font-weight:${isToday?'800':'400'};color:${isToday?'var(--accent)':'var(--text)'}">${d}</div>
+      ${dayTermine.map(t => `<div style="font-size:9px;background:var(--accent);color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${t.bezeichnung}</div>`).join('')}
+    </div>`;
+  }
+  html += '</div>';
+  cal.innerHTML = html;
+}
+
+function prevMonth() {
+  kalenderDate = new Date(kalenderDate.getFullYear(), kalenderDate.getMonth()-1, 1);
+  renderKalender();
+}
+
+function nextMonth() {
+  kalenderDate = new Date(kalenderDate.getFullYear(), kalenderDate.getMonth()+1, 1);
+  renderKalender();
+}
+
+// ─── FAHRERDOKUMENTE ──────────────────────────────────────────────
+function captureDocument(type) {
+  showToast('📷 Kamera wird geöffnet...', '');
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.capture = 'environment';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const base64 = ev.target.result;
+      const docData = {
+        type,
+        image: base64,
+        timestamp: new Date().toISOString(),
+        driverId: currentUser.id,
+        mandantId: currentMandant ? currentMandant.id : 'M-0001'
+      };
+      if (!DB.driverDocs) DB.driverDocs = {};
+      if (!DB.driverDocs[currentUser.id]) DB.driverDocs[currentUser.id] = {};
+      DB.driverDocs[currentUser.id][type] = docData;
+      if (firebaseDB && currentMandant) {
+        firebaseDB.ref('mandanten/' + currentMandant.id + '/driverDocs/' + currentUser.id + '/' + type).set(docData);
+      }
+      refreshDocuments();
+      showToast('✅ Dokument gespeichert', 'success');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+function refreshDocuments() {
+  const container = document.getElementById('driver-docs-container');
+  if (!container) return;
+  const docs = DB.driverDocs && DB.driverDocs[currentUser.id] ? DB.driverDocs[currentUser.id] : {};
+  const docTypes = [
+    { key: 'fuehrerschein', label: 'Führerschein', icon: '🪪' },
+    { key: 'fahrerkarte', label: 'Fahrerkarte', icon: '💳' }
+  ];
+  container.innerHTML = docTypes.map(dt => {
+    const doc = docs[dt.key];
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:24px">${dt.icon}</span>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px">${dt.label}</div>
+        ${doc ? `<span style="margin-left:auto;font-size:11px;color:var(--green)">✅ Vorhanden</span>` : `<span style="margin-left:auto;font-size:11px;color:var(--muted)">Nicht hochgeladen</span>`}
+      </div>
+      ${doc ? `<img src="${doc.image}" style="width:100%;border-radius:10px;margin-bottom:8px;max-height:200px;object-fit:contain">
+        <div style="font-size:11px;color:var(--muted)">Hochgeladen: ${new Date(doc.timestamp).toLocaleString('de-DE')}</div>` : ''}
+      <button class="btn btn-primary btn-sm mt-8" onclick="captureDocument('${dt.key}')">📷 ${doc ? 'Neu aufnehmen' : 'Jetzt fotografieren'}</button>
+    </div>`;
+  }).join('');
+}
+
 </script>
 </body>
 </html>
