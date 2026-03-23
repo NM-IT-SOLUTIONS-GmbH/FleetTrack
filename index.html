@@ -884,13 +884,7 @@
       <div class="bb-title">Nachrichten</div>
       <div class="bb-desc">Nachrichten empfangen und an Admin senden</div>
     </div>
-    <div id="btn-fahrerdokumente" class="big-btn" onclick="goTo('screen-fahrerdokumente')" style="display:none">
-      <div class="bb-icon" style="background:rgba(155,89,182,0.15)">📋</div>
-      <div class="bb-title">Meine Dokumente</div>
-      <div class="bb-desc">Führerschein & Fahrerkarte verwalten</div>
-    </div>
-    <div class="big-btn" onclick="goTo('screen-driver-docs')" id="docs-btn" style="position:relative">
-      <div class="notif-dot" id="docs-notif-dot"></div>
+    <div id="btn-fahrerdokumente" class="big-btn" onclick="goTo('screen-driver-docs')" style="display:none">
       <div class="bb-icon" style="background:rgba(155,89,182,0.15)">📋</div>
       <div class="bb-title">Meine Dokumente</div>
       <div class="bb-desc">Führerschein & Fahrerkarte verwalten</div>
@@ -1953,7 +1947,13 @@ function goBack() {
   if (screenHistory.length > 0) {
     const prev = screenHistory.pop();
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(prev).classList.add('active');
+    const el = document.getElementById(prev);
+    if (!el) return;
+    el.classList.add('active');
+    window.scrollTo(0, 0);
+    if (prev === 'screen-driver-home') refreshDriverHome();
+    if (prev === 'screen-admin-home') refreshAdmin();
+    if (prev === 'screen-superadmin') refreshSuperAdmin();
   }
 }
 
@@ -2214,7 +2214,7 @@ function openEditMandant(m) {
   // Load modules
   const mods = m.modules || { abfahrt: true, pod: true, nachrichten: true, fuhrpark: false, fahrerdokumente: false };
   Object.keys(mods).forEach(mod => {
-    
+    const el = document.getElementById('m-mod-' + mod);
     if (el) { el.checked = mods[mod]; highlightModule(mod, mods[mod]); }
   });
   document.getElementById('m-questions-section').style.display = mods.abfahrt ? 'block' : 'none';
@@ -2400,16 +2400,16 @@ function saveNotificationsToStorage() {
 
 function loadNotificationsFromStorage() {
   try {
-    
+    const stored = localStorage.getItem('fc_notifications');
     if (stored) {
-      
+      const parsed = JSON.parse(stored);
       // Merge: add stored notifications not already in DB
       parsed.forEach(n => {
-        if (!DB.notifications.find(existing => existing.id === n.id)) {
+        if (!DB.notifications.find(e => e.id === n.id)) {
           DB.notifications.push(n);
         } else {
           // Update read status
-          
+          const existing = DB.notifications.find(e => e.id === n.id);
           if (existing) existing.read = n.read;
         }
       });
@@ -2541,7 +2541,7 @@ function msgTab(name) {
 }
 
 function renderDriverNotifs2() {
-  const list = document.getElementById('fahrer-msgs-list');
+  const list = document.getElementById('driver-notifs-list2');
   if (!list) return;
   list.innerHTML = '';
   const myNotifs = DB.notifications.filter(n => (n.to === currentUser.id || n.to === 'all') && n.from === 'Admin');
@@ -2580,7 +2580,7 @@ function handleDriverMsgPhoto(event) {
 }
 
 function renderDriverMsgPhotos() {
-  const prev = document.getElementById('driver-msg-photo-preview');
+  const prev = document.getElementById('driver-msg-photos');
   if (!prev) return;
   prev.innerHTML = '';
   driverMsgPhotos.forEach((src, i) => {
@@ -2722,12 +2722,13 @@ function forwardPOD() {
 
 function showDriverQR() {
   const id = document.getElementById('modal-fahrer-id').value;
-  
+  const driver = DB.drivers.find(d => d.id === id);
   if (!driver) return;
   currentQRDriver = driver;
   const qrContainer = document.getElementById('driver-qr-container');
   const canvas = document.getElementById('driver-qr-canvas');
   
+  const info = document.getElementById('driver-qr-info');
   qrContainer.style.display = 'block';
   const qrData = generateDriverQR(driver);
   if (typeof QRCode !== 'undefined') {
@@ -2742,7 +2743,7 @@ function showDriverQR() {
 
 function downloadDriverQR() {
   if (!currentQRDriver) return;
-  
+  const canvas = document.getElementById('driver-qr-canvas');
   const link = document.createElement('a');
   link.download = 'QR_' + currentQRDriver.vorname + '_' + currentQRDriver.nachname + '.png';
   link.href = canvas.toDataURL();
@@ -2757,7 +2758,7 @@ function renderFahrerMsgs() {
   const msgs = DB.driverMessages || [];
   if (msgs.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine Nachrichten von Fahrern</p>'; return; }
   [...msgs].reverse().forEach(m => {
-    
+    const card = document.createElement('div');
     card.className = 'report-card';
     card.innerHTML = `
       <div class="report-top">
@@ -3050,7 +3051,7 @@ function submitPOD() {
     const pdfBtn = document.getElementById('success-pdf-btn-wrap');
     if (pdfBtn) { pdfBtn.style.display = 'block'; }
     if (isOnline) {
-      
+      const recipient = currentUser.email2 || currentUser.email1 || currentUser.email || emailSettings.from;
       setTimeout(async () => {
         // Build smart email from OCR
         const ocrTexts = compressed._ocrTexts || [];
@@ -3123,11 +3124,11 @@ function initSigPad(canvasId) {
     const src = e.touches ? e.touches[0] : e;
     return { x: (src.clientX - r.left), y: (src.clientY - r.top) };
   }
-  function start(e) { e.preventDefault(); drawing = true;  lastX = p.x; lastY = p.y; }
+  function start(e) { e.preventDefault(); drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; }
   function move(e) {
     e.preventDefault();
     if (!drawing) return;
-    
+    const p = getPos(e);
     ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y); ctx.stroke();
     lastX = p.x; lastY = p.y;
   }
@@ -3778,6 +3779,7 @@ function renderKontrollen() {
     const card = document.createElement('div');
     card.className = 'report-card';
     card.style.cursor = 'pointer';
+    const maengel = c.answers ? c.answers.filter(a => a.answer === 'nein').length : 0;
     const statusColor = c.status === 'bearbeitet' ? 'var(--green)' : 'var(--accent)';
     const statusLabel = c.status === 'bearbeitet' ? '✅ Bearbeitet' : '🔄 Offen';
     card.innerHTML = `
@@ -4046,7 +4048,6 @@ function markRead(id, btn) {
   btn.parentElement.querySelector('.notif-msg').style.opacity = '0.6';
   btn.replaceWith(document.createTextNode('✅ Gelesen'));
   // Update badge
-  
   const myUnread = DB.notifications.filter(n => (n.to === currentUser.id || n.to === 'all') && !n.read);
   const badge = document.getElementById('notif-badge');
   if (myUnread.length > 0) { badge.style.display='flex'; badge.textContent = myUnread.length; }
