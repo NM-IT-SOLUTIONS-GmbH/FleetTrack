@@ -1569,7 +1569,34 @@
 <div class="toast" id="toast"></div>
 
 <!-- ═══════════════════════════════════════ SCRIPT ═══════════════════════════════════════ -->
-<script>
+<script>// ─── APP STATE ───────────────────────────────────────────────────
+let currentUser = null;
+let currentRole = null;
+let currentMandant = null;
+let abfahrtAnswers = {};
+let abfahrtPhotos = {};
+let podPhotos = [];
+let lastPDFBlob = null;
+let lastPDFBase64 = null;
+let selectedSuperAdmin = null;
+let qrStream = null;
+let qrScanInterval = null;
+let loginRole = 'fahrer';
+let offlineQueue = [];
+let sigPads = {};
+let screenHistory = [];
+let toastTimer = null;
+let driverMsgPhotos = [];
+let currentCheckForStatus = null;
+let currentPODForForward = null;
+let currentQRDriver = null;
+let adminWeeklyChart = null;
+let donutPOD = null, donutCheck = null, donutMsg = null;
+let firebaseApp = null;
+let firebaseDB = null;
+let isOnline = navigator.onLine;
+
+
 // ─── FIREBASE CONFIG ──────────────────────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyAMHN6xL8oZp0hx1MTGxknX3FaCHmC9MnM",
@@ -1581,8 +1608,6 @@ const firebaseConfig = {
   appId: "1:1077205954230:web:950f1f62c5ea563b2dc017"
 };
 
-let firebaseApp = null;
-let firebaseDB = null;
 
 function initFirebase() {
   try {
@@ -1818,6 +1843,8 @@ const DEFAULT_QUESTIONS = [
   'Führerschein und Fahrerkarte (Tachograph) vorhanden und gültig?',
   'Kraftstoff- und AdBlue-Stand ausreichend für die geplante Tour?'
 ];
+// Alias for backward compatibility
+const QUESTIONS = DEFAULT_QUESTIONS;
 
 // Pre-load some demo data
 (function loadDemoData() {
@@ -1844,24 +1871,10 @@ function getMandantQuestions() {
   }
   return DEFAULT_QUESTIONS;
 }
-// Alias for backward compatibility
-const QUESTIONS = DEFAULT_QUESTIONS;
 
-// ─── APP STATE ───────────────────────────────────────────────────
-let currentUser = null;
-let currentRole = null;
-let currentMandant = null;
-let abfahrtAnswers = {};
-let abfahrtPhotos = {};
-let podPhotos = [];
-let lastPDFBlob = null;
-let lastPDFBase64 = null;
-let screenHistory = [];
-let sigPads = {};
-let offlineQueue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+// ─── APP STATE moved to top ───
 
 // ─── OFFLINE DETECTION ───────────────────────────────────────────
-let isOnline = navigator.onLine;
 function updateOnlineStatus() {
   isOnline = navigator.onLine;
   document.getElementById('offline-banner').classList.toggle('show', !isOnline);
@@ -2413,7 +2426,6 @@ function testEmail() {
 }
 
 // ─── DRIVER MESSAGING ────────────────────────────────────────────
-let driverMsgPhotos = [];
 
 function msgTab(name) {
   ['empfangen','senden'].forEach(t => {
@@ -2533,7 +2545,6 @@ function renderDriverSentMsgs() {
 }
 
 // ─── STATUS MANAGEMENT ───────────────────────────────────────────
-let currentCheckForStatus = null;
 
 function setCheckStatus(status) {
   if (!currentCheckForStatus) return;
@@ -2556,7 +2567,6 @@ function setPODStatus(status) {
 }
 
 // ─── POD FORWARD ─────────────────────────────────────────────────
-let currentPODForForward = null;
 
 function clearAllPODs() {
   if (!confirm('Alle ' + DB.pods.length + ' PODs wirklich löschen?')) return;
@@ -2607,7 +2617,6 @@ function forwardPOD() {
 }
 
 // ─── QR CODE GENERATION ──────────────────────────────────────────
-let currentQRDriver = null;
 
 function showDriverQR() {
   const id = document.getElementById('modal-fahrer-id').value;
@@ -2901,7 +2910,6 @@ function submitPOD() {
       const img = new Image();
       img.onload = () => {
         const c = document.createElement('canvas');
-        const maxW = 120; let w = img.width, h = img.height;
         if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
@@ -3360,7 +3368,6 @@ function renderFuhrpark() {
   // Placeholder - full implementation in next phase
 }
 
-let adminWeeklyChart = null;
 
 function adminNav(name) {
   closeAdminMenu();
@@ -3449,7 +3456,6 @@ function renderAdminDashboard() {
   renderDonutCharts();
 }
 
-let donutPOD = null, donutCheck = null, donutMsg = null;
 
 function renderDonutCharts() {
   if (typeof Chart === 'undefined') return;
@@ -3951,7 +3957,6 @@ document.querySelectorAll('.modal-overlay').forEach(m => {
 function triggerPhotoUpload(inputId) { document.getElementById(inputId).click(); }
 
 // ─── TOAST ────────────────────────────────────────────────────────
-let toastTimer = null;
 function showToast(msg, type = '') {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -3966,9 +3971,6 @@ document.addEventListener('keypress', e => {
 });
 
 // ─── LOGIN SYSTEM ────────────────────────────────────────────────
-let selectedSuperAdmin = null;
-let qrStream = null;
-let qrScanInterval = null;
 
 // Called when user types in username field
 function onLoginInput(val) {
@@ -4151,7 +4153,6 @@ function processQRLogin(data) {
   try {
     const qrData = JSON.parse(atob(data));
     if (qrData.type !== 'fleet-login') { showToast('❌ Ungültiger QR-Code', 'error'); return; }
-    const driver = DB.drivers.find(d => d.username === qrData.u && d.password === qrData.p && d.status === 'active');
     if (driver) {
       showToast('✅ QR erkannt! Anmelden...', 'success');
       currentUser = driver; currentRole = 'driver';
