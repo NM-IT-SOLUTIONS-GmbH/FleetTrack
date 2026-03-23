@@ -4021,61 +4021,62 @@ function selectSuperAdmin(sa, btn) {
 
 // ── UNIFIED LOGIN ──
 function doLogin() {
-  const u = document.getElementById('login-user').value.trim();
-  const p = document.getElementById('login-pass').value.trim();
-  const mandantId = document.getElementById('login-mandant-admin')
-    ? document.getElementById('login-mandant-admin').value.trim().toUpperCase() : '';
+  const u = (document.getElementById('login-user').value || '').trim();
+  const p = (document.getElementById('login-pass').value || '').trim();
+  const mandantEl = document.getElementById('login-mandant-admin');
+  const mandantId = mandantEl ? mandantEl.value.trim().toUpperCase() : '';
 
   if (!u || !p) { showToast('⚠️ Bitte Benutzername und Kennwort eingeben', 'error'); return; }
 
-  // ── 1. SuperAdmin check ──
-  if (selectedSuperAdmin) {
-    const sa = DB.superadmins.find(a => a.id === selectedSuperAdmin.id && a.password === p);
-    if (!sa) { showToast('❌ Kennwort falsch', 'error'); return; }
-    if (sa.mfaSecret) {
-      const mfa = document.getElementById('login-mfa-super').value.trim();
-      if (!mfa) { document.getElementById('sa-mfa-group').style.display = 'block'; document.getElementById('login-mfa-super').focus(); showToast('🔐 Bitte MFA-Code eingeben', ''); return; }
-      if (mfa !== sa.mfaCode) { showToast('❌ MFA-Code falsch', 'error'); return; }
-    }
+  // ── 1. SuperAdmin — always checked first, no dropdown needed ──
+  const sa = DB.superadmins.find(a =>
+    a.username.toLowerCase() === u.toLowerCase() && a.password === p
+  );
+  if (sa) {
     currentUser = sa; currentRole = 'superadmin';
-    goTo('screen-superadmin'); refreshSuperAdmin(); return;
-  }
-  // Also check if username exactly matches a superadmin (case-insensitive)
-  const directSA = DB.superadmins.find(a => a.username.toLowerCase() === u.toLowerCase() && a.password === p);
-  if (directSA) {
-    currentUser = directSA; currentRole = 'superadmin';
-    goTo('screen-superadmin'); refreshSuperAdmin(); return;
+    goTo('screen-superadmin');
+    setTimeout(refreshSuperAdmin, 100);
+    return;
   }
 
-  // ── 2. Admin check (requires mandant-ID) ──
+  // ── 2. Admin (needs Mandant-ID) ──
   if (mandantId) {
     const mandant = DB.mandanten.find(m => m.id === mandantId);
     if (!mandant) { showToast('❌ Mandant-ID nicht gefunden: ' + mandantId, 'error'); return; }
-    if (!mandant.active) { showToast('⛔ Dieser Mandant ist deaktiviert', 'error'); return; }
+    if (mandant.active === false) { showToast('⛔ Dieser Mandant ist deaktiviert', 'error'); return; }
     if (mandant.adminUser !== u || mandant.adminPass !== p) { showToast('❌ Benutzername oder Kennwort falsch', 'error'); return; }
     currentUser = { username: u, name: 'Administrator', mandantId: mandant.id };
     currentRole = 'admin'; currentMandant = mandant;
     if (!checkMandantExpiry()) return;
-    if (currentMandant.emailSettings && currentMandant.emailSettings.pubkey) emailSettings = { ...emailSettings, ...currentMandant.emailSettings };
-    goTo('screen-admin-home'); loadO365Settings(); initEmailJS(); loadDriversFromLocal();
-    setTimeout(() => { initFirebase(); setTimeout(setupDriversFirebaseSync, 1000); }, 500); return;
+    if (currentMandant.emailSettings && currentMandant.emailSettings.pubkey) {
+      emailSettings = { ...emailSettings, ...currentMandant.emailSettings };
+    }
+    goTo('screen-admin-home');
+    loadO365Settings(); initEmailJS(); loadDriversFromLocal();
+    setTimeout(() => { initFirebase(); setTimeout(setupDriversFirebaseSync, 1000); }, 500);
+    return;
   }
 
-  // ── 3. Fahrer check ──
-  const driver = DB.drivers.find(d => d.username === u && d.password === p && d.status === 'active');
+  // ── 3. Fahrer ──
+  const driver = DB.drivers.find(d =>
+    d.username === u && d.password === p && d.status === 'active'
+  );
   if (driver) {
     currentUser = driver; currentRole = 'driver';
     currentMandant = DB.mandanten.find(m => m.id === (driver.mandantId || 'M-0001')) || DB.mandanten[0];
-    goTo('screen-driver-home'); loadDriversFromLocal(); setTimeout(initFirebase, 500); return;
+    goTo('screen-driver-home'); loadDriversFromLocal(); setTimeout(initFirebase, 500);
+    return;
   }
 
-  // ── 4. No match ──
-  // Check if username is admin but no mandant-ID given
-  const isAdmin = DB.mandanten.some(m => m.adminUser === u);
-  if (isAdmin) {
-    document.getElementById('login-mandant-group').style.display = 'block';
-    document.getElementById('login-mandant-admin').focus();
-    showToast('👤 Admin erkannt — bitte Mandant-ID eingeben', 'error'); return;
+  // ── 4. Kein Treffer ──
+  const isAdmin = DB.mandanten.some(m => m.adminUser.toLowerCase() === u.toLowerCase());
+  if (isAdmin && !mandantId) {
+    const mg = document.getElementById('login-mandant-group');
+    if (mg) mg.style.display = 'block';
+    const ma = document.getElementById('login-mandant-admin');
+    if (ma) ma.focus();
+    showToast('👤 Admin erkannt — bitte Mandant-ID eingeben', 'error');
+    return;
   }
   showToast('❌ Benutzername oder Kennwort falsch', 'error');
 }
