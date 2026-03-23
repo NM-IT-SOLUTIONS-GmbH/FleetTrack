@@ -578,16 +578,7 @@
       <div style="flex:1;height:1px;background:var(--border)"></div>
     </div>
 
-    <!-- ══ MANDANT-ID (nur für Admin) ══ -->
-    <div class="form-group" id="login-mandant-group" style="display:none">
-      <label style="display:flex;align-items:center;gap:6px">
-        Mandant-ID
-        <span style="font-size:10px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:4px">Admin</span>
-      </label>
-      <input type="text" id="login-mandant-admin" placeholder="M-0001"
-        style="font-family:monospace;letter-spacing:2px;font-size:15px"
-        oninput="this.value=this.value.toUpperCase()">
-    </div>
+
 
     <!-- ══ USERNAME + PASSWORD ══ -->
     <div class="form-group">
@@ -614,7 +605,7 @@
 
     <button class="btn btn-primary" onclick="doLogin()">🔐 Anmelden</button>
     <p id="login-hint" style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6">
-      Fahrer melden sich direkt an · <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="toggleMandantField()">Admin-Login</span>
+      Benutzername + Kennwort eingeben und anmelden
     </p>
 
     <div style="margin-top:16px;padding:10px;background:var(--surface2);border-radius:10px;font-size:11px;color:var(--muted);text-align:center">
@@ -4073,107 +4064,32 @@ document.addEventListener('keypress', e => {
 // ─── LOGIN SYSTEM ────────────────────────────────────────────────
 
 // Called when user types in username field
-function toggleMandantField() {
-  const mg = document.getElementById('login-mandant-group');
-  if (!mg) return;
-  const isVisible = mg.style.display !== 'none';
-  mg.style.display = isVisible ? 'none' : 'block';
-  if (!isVisible) {
-    document.getElementById('login-mandant-admin').focus();
-    const hint = document.getElementById('login-hint');
-    if (hint) hint.innerHTML = 'Mandant-ID eingeben · <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="toggleMandantField()">Abbrechen</span>';
-  } else {
-    const hint = document.getElementById('login-hint');
-    if (hint) hint.innerHTML = 'Fahrer melden sich direkt an · <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="toggleMandantField()">Admin-Login</span>';
-  }
-}
 
 function onLoginInput(val) {
   const v = val.trim().toLowerCase();
-  const mandantGroup = document.getElementById('login-mandant-group');
   const saWrap = document.getElementById('sa-user-list-wrap');
   const hint = document.getElementById('login-hint');
-
-  // Check if matches a superadmin username
   const matchedSA = DB.superadmins.filter(sa => sa.username.toLowerCase().startsWith(v) && v.length > 0);
-
   if (matchedSA.length > 0) {
-    saWrap.style.display = 'block';
-    mandantGroup.style.display = 'none';
-    // Only re-render list if no SA is selected yet
+    if (saWrap) saWrap.style.display = 'block';
     if (!selectedSuperAdmin) renderSAUserList(v);
     if (hint) hint.textContent = selectedSuperAdmin
       ? '⚡ ' + selectedSuperAdmin.name + ' ausgewählt — Kennwort eingeben.'
       : '⚡ SuperAdmin erkannt — Benutzer auswählen.';
     return;
   }
-
-  // If user cleared the field, reset selection
-  if (v.length === 0) {
-    selectedSuperAdmin = null;
-    saWrap.style.display = 'none';
-  }
-
-  // Check if matches an admin username in any mandant
-  const isAdmin = DB.mandanten.some(m => m.adminUser.toLowerCase() === v);
-  if (isAdmin && v.length > 2) {
-    mandantGroup.style.display = 'block';
-    if (hint) hint.textContent = '👤 Admin-Login — bitte Mandant-ID eingeben.';
-  } else {
-    mandantGroup.style.display = 'none';
-    if (hint) hint.textContent = v.length > 0
-      ? '🚛 Als Fahrer anmelden...'
-      : 'Fahrer melden sich direkt an · Admins benötigen ihre Mandant-ID';
-  }
+  if (saWrap) saWrap.style.display = 'none';
+  if (v.length === 0) selectedSuperAdmin = null;
+  if (hint) hint.textContent = 'Benutzername + Kennwort eingeben und anmelden';
 }
 
-function renderSAUserList(filter) {
-  const list = document.getElementById('sa-user-list');
-  if (!list) return;
-  const filtered = filter
-    ? DB.superadmins.filter(sa => sa.username.toLowerCase().startsWith(filter))
-    : DB.superadmins;
-  list.innerHTML = '';
-  filtered.forEach(sa => {
-    const btn = document.createElement('button');
-    btn.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;cursor:pointer;width:100%;text-align:left;font-family:inherit;transition:all 0.2s';
-    btn.innerHTML = `
-      <div style="width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;color:#fff;font-size:12px;flex-shrink:0">${sa.avatar}</div>
-      <div style="flex:1"><div style="font-weight:700;font-size:13px">${sa.name}</div><div style="font-size:10px;color:var(--muted)">${sa.id}</div></div>
-      <span style="color:var(--muted)">›</span>`;
-    btn.onclick = () => {
-      selectedSuperAdmin = sa;
-      list.querySelectorAll('button').forEach(b => {
-        b.style.borderColor = 'var(--border)';
-        b.style.background = 'var(--surface2)';
-      });
-      btn.style.borderColor = 'var(--accent)';
-      btn.style.background = 'rgba(26,122,191,0.08)';
-      const hint = document.getElementById('login-hint');
-      if (hint) hint.textContent = '⚡ ' + sa.name + ' ausgewählt — jetzt Kennwort eingeben.';
-      document.getElementById('login-pass').focus();
-    };
-    list.appendChild(btn);
-  });
-}
-
-function selectSuperAdmin(sa, btn) {
-  selectedSuperAdmin = sa;
-  document.querySelectorAll('#sa-user-list button').forEach(b => b.style.borderColor = 'var(--border)');
-  btn.style.borderColor = 'var(--accent)';
-  document.getElementById('login-pass').focus();
-}
-
-// ── UNIFIED LOGIN ──
 function doLogin() {
   const u = (document.getElementById('login-user').value || '').trim();
   const p = (document.getElementById('login-pass').value || '').trim();
-  const mandantEl = document.getElementById('login-mandant-admin');
-  const mandantId = mandantEl ? mandantEl.value.trim().toUpperCase() : '';
 
   if (!u || !p) { showToast('⚠️ Bitte Benutzername und Kennwort eingeben', 'error'); return; }
 
-  // ── 1. SuperAdmin — always checked first, no dropdown needed ──
+  // ── 1. SuperAdmin ──
   const sa = DB.superadmins.find(a =>
     a.username.toLowerCase() === u.toLowerCase() && a.password === p
   );
@@ -4184,12 +4100,11 @@ function doLogin() {
     return;
   }
 
-  // ── 2. Admin (needs Mandant-ID) ──
-  if (mandantId) {
-    const mandant = DB.mandanten.find(m => m.id === mandantId);
-    if (!mandant) { showToast('❌ Mandant-ID nicht gefunden: ' + mandantId, 'error'); return; }
-    if (mandant.active === false) { showToast('⛔ Dieser Mandant ist deaktiviert', 'error'); return; }
-    if (mandant.adminUser !== u || mandant.adminPass !== p) { showToast('❌ Benutzername oder Kennwort falsch', 'error'); return; }
+  // ── 2. Admin — Mandant ist fest in dieser Instanz ──
+  const mandant = DB.mandanten.find(m =>
+    m.adminUser === u && m.adminPass === p && m.active !== false
+  );
+  if (mandant) {
     currentUser = { username: u, name: 'Administrator', mandantId: mandant.id };
     currentRole = 'admin'; currentMandant = mandant;
     if (!checkMandantExpiry()) return;
@@ -4213,16 +4128,6 @@ function doLogin() {
     return;
   }
 
-  // ── 4. Kein Treffer ──
-  const isAdmin = DB.mandanten.some(m => m.adminUser.toLowerCase() === u.toLowerCase());
-  if (isAdmin && !mandantId) {
-    const mg = document.getElementById('login-mandant-group');
-    if (mg) mg.style.display = 'block';
-    const ma = document.getElementById('login-mandant-admin');
-    if (ma) ma.focus();
-    showToast('👤 Admin erkannt — bitte Mandant-ID eingeben', 'error');
-    return;
-  }
   showToast('❌ Benutzername oder Kennwort falsch', 'error');
 }
 
