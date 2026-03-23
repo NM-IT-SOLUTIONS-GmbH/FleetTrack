@@ -621,6 +621,7 @@
       © 2026 NM-IT Solutions GmbH · Alle Rechte vorbehalten
     </div>
   </div>
+</div><!-- /screen-login -->
 
 <!-- ═══════════════════════════════════════
      SCREEN: SUPER ADMIN
@@ -2277,13 +2278,13 @@ function checkMandantExpiry() {
     return false;
   }
   if (currentMandant.gueltigBis) {
-    
+    const expires = new Date(currentMandant.gueltigBis);
     if (expires < new Date()) {
       showToast('⏰ Ihre Lizenz ist abgelaufen. Bitte wenden Sie sich an NM-IT Solutions.', 'error');
       setTimeout(doLogout, 3000);
       return false;
     }
-    
+    const daysLeft = Math.ceil((expires - new Date()) / 86400000);
     if (daysLeft <= 30) {
       showToast('⚠️ Ihre Lizenz läuft in ' + daysLeft + ' Tagen ab!', 'error');
     }
@@ -2692,11 +2693,12 @@ function refreshDriverHome() {
     const btn = document.getElementById(btnId);
     if (btn) btn.style.display = hasModule(mod) ? 'block' : 'none';
   });
-  
+  const now = new Date();
   document.getElementById('driver-date').textContent = now.toLocaleDateString('de-DE', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
   // Notifications
-  
-  
+  const myNotifs = DB.notifications.filter(n => (n.to === currentUser.id || n.to === 'all') && !n.read);
+  const badge = document.getElementById('notif-badge');
+  const dot = document.getElementById('msg-notif-dot');
   if (myNotifs.length > 0) { badge.style.display='flex'; badge.textContent = myNotifs.length; }
   else { badge.style.display='none'; }
   
