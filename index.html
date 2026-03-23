@@ -627,15 +627,28 @@
      SCREEN: SUPER ADMIN
 ═══════════════════════════════════════ -->
 <div class="screen" id="screen-superadmin">
-  <div class="topbar">
-    <div>
-      <div class="topbar-title">⚡ Super Admin</div>
-      <div class="topbar-sub">NM-IT Solutions GmbH</div>
+  <div class="topbar" style="padding:10px 16px;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px">⚡</div>
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800">Super Admin</div>
+        <div style="font-size:10px;color:var(--muted)">NM-IT Solutions GmbH</div>
+      </div>
     </div>
     <button class="btn btn-secondary btn-sm" onclick="doLogout()">Abmelden</button>
   </div>
+
+  <!-- SA NAV TABS -->
+  <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:8px 16px">
+    <div style="display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none">
+      <button id="sa-tab-mandanten" onclick="saNav('mandanten')" style="flex-shrink:0;padding:8px 16px;border:1.5px solid var(--accent);background:rgba(26,122,191,0.1);color:var(--accent);border-radius:20px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🏢 Mandanten</button>
+      <button id="sa-tab-superuser" onclick="saNav('superuser')" style="flex-shrink:0;padding:8px 16px;border:1.5px solid var(--border);background:transparent;color:var(--muted);border-radius:20px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">👤 SuperUser Profile</button>
+      <button id="sa-tab-profil" onclick="saNav('profil')" style="flex-shrink:0;padding:8px 16px;border:1.5px solid var(--border);background:transparent;color:var(--muted);border-radius:20px;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔐 Mein Profil</button>
+    </div>
+  </div>
+
   <div class="page-content">
-    <!-- Stats -->
+    <!-- Stats (always visible) -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
       <div style="background:linear-gradient(135deg,#1a7abf,#1567a8);border-radius:16px;padding:16px">
         <div style="font-size:11px;color:rgba(255,255,255,0.7);margin-bottom:4px">Mandanten</div>
@@ -646,29 +659,40 @@
         <div style="font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:#fff" id="sa-stat-admins">0</div>
       </div>
     </div>
-    <!-- Mandanten Liste -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700">Mandanten</div>
-      <button class="btn btn-primary btn-sm" onclick="openAddMandant()">+ Neu</button>
-    </div>
-    <div id="mandanten-list"></div>
 
-    <!-- Passwort ändern -->
-    <div style="margin-top:20px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px">
-      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px">🔐 Mein Passwort ändern</div>
-      <div class="form-group">
-        <label>Aktuelles Passwort</label>
-        <input type="password" id="sa-pass-current" placeholder="••••••••">
+    <!-- ═══ MANDANTEN VIEW ═══ -->
+    <div id="sa-view-mandanten">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700">Mandanten</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddMandant()">+ Neu</button>
       </div>
-      <div class="form-group">
-        <label>Neues Passwort</label>
-        <input type="password" id="sa-pass-new" placeholder="Mindestens 8 Zeichen">
+      <div id="mandanten-list"></div>
+    </div>
+
+    <!-- ═══ SUPERUSER VIEW ═══ -->
+    <div id="sa-view-superuser" style="display:none">
+      <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px">👤 SuperUser Profile</div>
+      <div id="sa-superuser-list"></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-top:16px">
+        <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px">➕ Neuen SuperUser anlegen</div>
+        <div class="form-group"><label>Name</label><input type="text" id="new-su-name" placeholder="Vollständiger Name"></div>
+        <div class="form-group"><label>Benutzername</label><input type="text" id="new-su-user" placeholder="benutzername"></div>
+        <div class="form-group"><label>Passwort</label><input type="password" id="new-su-pass" placeholder="Mindestens 8 Zeichen"></div>
+        <button class="btn btn-primary btn-sm" onclick="addSuperUser()">➕ SuperUser anlegen</button>
       </div>
-      <div class="form-group">
-        <label>Neues Passwort wiederholen</label>
-        <input type="password" id="sa-pass-confirm" placeholder="••••••••">
+    </div>
+
+    <!-- ═══ PROFIL VIEW ═══ -->
+    <div id="sa-view-profil" style="display:none">
+      <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px">🔐 Mein Profil</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px">
+        <div id="sa-current-user-info" style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:10px;font-size:13px"></div>
+        <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px">🔐 Passwort ändern</div>
+        <div class="form-group"><label>Aktuelles Passwort</label><input type="password" id="sa-pass-current" placeholder="••••••••"></div>
+        <div class="form-group"><label>Neues Passwort</label><input type="password" id="sa-pass-new" placeholder="Mindestens 8 Zeichen"></div>
+        <div class="form-group"><label>Neues Passwort wiederholen</label><input type="password" id="sa-pass-confirm" placeholder="••••••••"></div>
+        <button class="btn btn-primary btn-sm" onclick="changeSAPassword()">🔐 Passwort ändern</button>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="changeSAPassword()">🔐 Passwort ändern</button>
     </div>
   </div>
 </div>
@@ -1659,12 +1683,12 @@ async function uploadAttachmentToStorage(file, folder) {
   try {
     const isRaw = file.type === 'application/pdf';
     const endpoint = 'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/' + (isRaw ? 'raw' : 'image') + '/upload';
-    
+    const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', CLOUDINARY_PRESET);
     formData.append('folder', 'fleet_attachments');
-    
-    
+    const response = await fetch(endpoint, { method: 'POST', body: formData });
+    const data = await response.json();
     if (data.secure_url) {
       return { url: data.secure_url, name: file.name || 'Anhang', type: file.type };
     }
@@ -1693,7 +1717,7 @@ function setupFirebaseListeners() {
     });
     // Listen for mandant-scoped drivers
     firebaseDB.ref('mandanten/' + mid + '/drivers').on('value', snap => {
-      
+      const data = snap.val(); if (!data) return;
       const fbDrivers = Object.values(data);
       if (fbDrivers.length > 0) {
         DB.drivers = fbDrivers;
@@ -1705,14 +1729,14 @@ function setupFirebaseListeners() {
     });
     // Listen for mandant-scoped checks
     firebaseDB.ref('mandanten/' + mid + '/checks').on('value', snap => {
-      
+      const data = snap.val(); if (!data) return;
       DB.checks = Object.values(data);
       renderDonutCharts();
       if (document.getElementById('admin-view-kontrollen') && document.getElementById('admin-view-kontrollen').style.display !== 'none') renderKontrollen();
     });
     // Listen for mandant-scoped pods
     firebaseDB.ref('mandanten/' + mid + '/pods').on('value', snap => {
-      
+      const data = snap.val(); if (!data) return;
       DB.pods = Object.values(data);
       renderDonutCharts();
       if (document.getElementById('admin-view-pods') && document.getElementById('admin-view-pods').style.display !== 'none') renderPODs();
@@ -1722,7 +1746,7 @@ function setupFirebaseListeners() {
   // Listen for notifications (mandant-scoped)
   const notifsRef = firebaseDB.ref('mandanten/' + mid + '/notifications');
   notifsRef.on('value', snap => {
-    
+    const data = snap.val(); if (!data) return;
     const all = Object.values(data);
     // Merge into DB
     all.forEach(n => {
@@ -1737,7 +1761,7 @@ function setupFirebaseListeners() {
   });
   // Listen for checks
   firebaseDB.ref('checks').on('value', snap => {
-    
+    const data = snap.val(); if (!data) return;
     const fbChecks = Object.values(data);
     fbChecks.forEach(c => {
       if (!DB.checks.find(e => e.id === c.id)) DB.checks.push(c);
@@ -1752,7 +1776,7 @@ function setupFirebaseListeners() {
 
   // Listen for pods
   firebaseDB.ref('pods').on('value', snap => {
-    
+    const data = snap.val(); if (!data) return;
     const fbPods = Object.values(data);
     fbPods.forEach(p => {
       if (!DB.pods.find(e => e.id === p.id)) DB.pods.push(p);
@@ -1765,7 +1789,7 @@ function setupFirebaseListeners() {
   // Listen for driver messages
   const msgsRef = firebaseDB.ref('mandanten/' + mid + '/driverMessages');
   msgsRef.on('value', snap => {
-    
+    const data = snap.val(); if (!data) return;
     DB.driverMessages = Object.values(data);
     if (document.getElementById('tab-fahrermsgs') && !document.getElementById('tab-fahrermsgs').classList.contains('hidden')) renderFahrerMsgs();
     if (document.getElementById('msg-tab-senden') && !document.getElementById('msg-tab-senden').classList.contains('hidden')) renderDriverSentMsgs();
@@ -1959,8 +1983,8 @@ function loadDriversFromLocal() {
 function setupDriversFirebaseSync() {
   if (!firebaseDB) return;
   firebaseDB.ref('drivers').on('value', snap => {
-    
-    
+    const data = snap.val(); if (!data) return;
+    const fbDrivers = Object.values(data);
     if (fbDrivers.length > 0) {
       // Replace DB drivers with Firebase data (source of truth)
       DB.drivers = fbDrivers;
@@ -1975,7 +1999,7 @@ const SUPERADMIN_EMAIL = 'info@nm-it-solutions.de';
 
 function generateMandantId(type) {
   const prefix = type === 'demo' ? 'D' : 'M';
-  
+  const existing = DB.mandanten.filter(m => m.type === type);
   const num = String(existing.length + 1).padStart(4, '0');
   return `${prefix}-${num}`;
 }
@@ -2012,14 +2036,91 @@ function refreshSuperAdmin() {
   }
 }
 
+function saNav(name) {
+  ['mandanten','superuser','profil'].forEach(v => {
+    const el = document.getElementById('sa-view-' + v);
+    if (el) el.style.display = v === name ? 'block' : 'none';
+    const tab = document.getElementById('sa-tab-' + v);
+    if (tab) {
+      if (v === name) {
+        tab.style.borderColor = 'var(--accent)';
+        tab.style.background = 'rgba(26,122,191,0.1)';
+        tab.style.color = 'var(--accent)';
+      } else {
+        tab.style.borderColor = 'var(--border)';
+        tab.style.background = 'transparent';
+        tab.style.color = 'var(--muted)';
+      }
+    }
+  });
+  if (name === 'superuser') renderSAUserProfiles();
+  if (name === 'profil') renderSACurrentProfile();
+}
+
+function renderSAUserProfiles() {
+  const list = document.getElementById('sa-superuser-list');
+  if (!list) return;
+  list.innerHTML = '';
+  DB.superadmins.forEach(sa => {
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:12px';
+    card.innerHTML = `
+      <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;color:#fff;font-size:16px;flex-shrink:0">${sa.avatar || sa.name.charAt(0)}</div>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:15px">${sa.name}</div>
+        <div style="font-size:12px;color:var(--muted);font-family:monospace">${sa.username} · ${sa.id}</div>
+      </div>
+      ${sa.id !== currentUser.id ? `<button onclick="deleteSuperUser('${sa.id}')" style="background:rgba(217,48,37,0.1);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px">🗑</button>` : '<span style="font-size:11px;color:var(--accent);font-weight:700">Ich</span>'}
+    `;
+    list.appendChild(card);
+  });
+}
+
+function renderSACurrentProfile() {
+  const el = document.getElementById('sa-current-user-info');
+  if (!el || !currentUser) return;
+  el.innerHTML = `<strong>${currentUser.name}</strong><br><span style="color:var(--muted)">${currentUser.username} · ${currentUser.id}</span>`;
+}
+
+function addSuperUser() {
+  const name = document.getElementById('new-su-name').value.trim();
+  const username = document.getElementById('new-su-user').value.trim();
+  const pass = document.getElementById('new-su-pass').value;
+  if (!name || !username || !pass) { showToast('⚠️ Alle Felder ausfüllen', 'error'); return; }
+  if (pass.length < 8) { showToast('⚠️ Passwort min. 8 Zeichen', 'error'); return; }
+  if (DB.superadmins.find(sa => sa.username.toLowerCase() === username.toLowerCase())) {
+    showToast('⚠️ Benutzername bereits vergeben', 'error'); return;
+  }
+  const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().substring(0,2);
+  const newSA = { id: 'SA-' + Date.now(), username, password: pass, name, kuerzel: initials, avatar: initials };
+  DB.superadmins.push(newSA);
+  if (firebaseDB) firebaseDB.ref('superadmins/' + newSA.id).set(newSA);
+  document.getElementById('new-su-name').value = '';
+  document.getElementById('new-su-user').value = '';
+  document.getElementById('new-su-pass').value = '';
+  showToast('✅ SuperUser ' + name + ' angelegt', 'success');
+  renderSAUserProfiles();
+}
+
+function deleteSuperUser(id) {
+  if (!confirm('SuperUser wirklich löschen?')) return;
+  const idx = DB.superadmins.findIndex(sa => sa.id === id);
+  if (idx < 0) return;
+  DB.superadmins.splice(idx, 1);
+  if (firebaseDB) firebaseDB.ref('superadmins/' + id).remove();
+  showToast('🗑 SuperUser gelöscht', 'success');
+  renderSAUserProfiles();
+  refreshSuperAdmin();
+}
+
 function loadMandantenFromFirebase(cb) {
   if (!firebaseDB) { cb && cb(); return; }
   firebaseDB.ref('mandanten').once('value', snap => {
-    
+    const data = snap.val(); if (!data) { cb && cb(); return; }
     Object.keys(data).forEach(mid => {
       const info = data[mid].info;
       if (!info) return;
-      
+      const idx = DB.mandanten.findIndex(m => m.id === info.id);
       if (idx >= 0) DB.mandanten[idx] = { ...DB.mandanten[idx], ...info };
       else DB.mandanten.push(info);
     });
@@ -2143,7 +2244,7 @@ function saveMandant() {
   const existingMandant = existingId ? DB.mandanten.find(m => m.id === existingId) : null;
   const modules = {};
   ['abfahrt','pod','nachrichten','fuhrpark','fahrerdokumente'].forEach(m => {
-    
+    const el = document.getElementById('m-mod-' + m);
     modules[m] = el ? el.checked : false;
   });
   // Collect questions
@@ -2169,8 +2270,8 @@ function saveMandant() {
   };
 
   if (existingId) {
-    
-    DB.mandanten[idx] = data;
+    const idx = DB.mandanten.findIndex(m => m.id === existingId);
+    if (idx >= 0) DB.mandanten[idx] = data;
     showToast('✅ Mandant gespeichert', 'success');
   } else {
     DB.mandanten.push(data);
@@ -2204,9 +2305,9 @@ function highlightModule(mod, active) {
 }
 
 function renderMandantQuestions(existingQuestions) {
-  
+  const list = document.getElementById('m-questions-list');
   if (!list) return;
-  
+  const qs = existingQuestions && existingQuestions.length > 0 ? existingQuestions : DEFAULT_QUESTIONS;
   list.innerHTML = '';
   qs.forEach((q, i) => {
     const row = document.createElement('div');
@@ -2222,10 +2323,10 @@ function renderMandantQuestions(existingQuestions) {
 }
 
 function addMandantQuestion() {
-  
+  const list = document.getElementById('m-questions-list');
   if (!list) return;
   const count = list.children.length + 1;
-  
+  const row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:6px;align-items:center';
   row.innerHTML = `
     <span style="font-size:11px;color:var(--muted);min-width:20px;text-align:right">${count}.</span>
@@ -2239,7 +2340,7 @@ function addMandantQuestion() {
 
 function renumberQuestions() {
   document.querySelectorAll('#m-questions-list > div').forEach((row, i) => {
-    
+    const num = row.querySelector('span');
     if (num) num.textContent = (i+1) + '.';
   });
 }
@@ -2248,7 +2349,7 @@ function renumberQuestions() {
 // Check mandant license when adding driver
 function checkLicense() {
   if (!currentMandant) return true;
-  
+  const mandantDrivers = DB.drivers.filter(d => d.status === 'active' && d.mandantId === currentMandant.id).length;
   const maxFahrer = currentMandant.maxFahrer || 5;
   if (mandantDrivers >= maxFahrer) {
     showToast('⚠️ Lizenz-Limit erreicht! Max. ' + maxFahrer + ' Fahrer.', 'error');
@@ -2318,7 +2419,7 @@ function loadNotificationsFromStorage() {
 
 function saveDriveMessageToStorage(msg) {
   try {
-    
+    const stored = JSON.parse(localStorage.getItem('fc_drivermsgs') || '[]');
     stored.push(msg);
     localStorage.setItem('fc_drivermsgs', JSON.stringify(stored));
     // Also merge into DB
@@ -2328,7 +2429,7 @@ function saveDriveMessageToStorage(msg) {
 
 function loadDriverMessagesFromStorage() {
   try {
-    
+    const stored = localStorage.getItem('fc_drivermsgs');
     if (stored) DB.driverMessages = JSON.parse(stored);
   } catch(e) {}
 }
@@ -2446,7 +2547,7 @@ function renderDriverNotifs2() {
   const myNotifs = DB.notifications.filter(n => (n.to === currentUser.id || n.to === 'all') && n.from === 'Admin');
   if (myNotifs.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:40px 20px">Keine Nachrichten</p>'; return; }
   [...myNotifs].reverse().forEach(n => {
-    
+    const card = document.createElement('div');
     card.className = 'notif-card' + (n.read ? ' read' : '');
     const attachIcon = n.attachmentType && n.attachmentType.includes('pdf') ? '📄' : '🖼️';
     card.innerHTML = `
@@ -2472,7 +2573,7 @@ function renderDriverNotifs2() {
 
 function handleDriverMsgPhoto(event) {
   Array.from(event.target.files).forEach(file => {
-    
+    const reader = new FileReader();
     reader.onload = e => { driverMsgPhotos.push(e.target.result); renderDriverMsgPhotos(); };
     reader.readAsDataURL(file);
   });
@@ -2531,7 +2632,7 @@ function renderDriverSentMsgs() {
   const myMsgs = (DB.driverMessages || []).filter(m => m.fromId === currentUser.id);
   if (myMsgs.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine gesendeten Nachrichten</p>'; return; }
   [...myMsgs].reverse().forEach(m => {
-    
+    const card = document.createElement('div');
     card.className = 'report-card';
     card.innerHTML = `
       <div class="report-top">
@@ -2701,7 +2802,6 @@ function refreshDriverHome() {
   const dot = document.getElementById('msg-notif-dot');
   if (myNotifs.length > 0) { badge.style.display='flex'; badge.textContent = myNotifs.length; }
   else { badge.style.display='none'; }
-  
   if (dot) dot.classList.toggle('show', myNotifs.length > 0);
   updateOfflinePending();
   } catch(e) { console.error('refreshDriverHome error:', e); }
@@ -2713,13 +2813,13 @@ function initAbfahrt() {
   abfahrtPhotos = {};
   const container = document.getElementById('abfahrt-questions');
   container.innerHTML = '';
-  
+  const questions = getMandantQuestions();
   questions.forEach((q, i) => {
     const div = document.createElement('div');
     div.className = 'question-card';
     div.id = `qcard-${i}`;
     div.innerHTML = `
-      <div class="question-num">Frage ${i+1} von ${QUESTIONS.length}</div>
+      <div class="question-num">Frage ${i+1} von ${questions.length}</div>
       <div class="question-text">${q}</div>
       <div class="answer-group">
         <button class="answer-btn" onclick="setAnswer(${i},'ja',this)">✅ Ja / In Ordnung</button>
@@ -2742,7 +2842,8 @@ function initAbfahrt() {
 
 function setAnswer(idx, val, btn) {
   abfahrtAnswers[idx] = val;
-  
+  const card = document.getElementById('qcard-' + idx);
+  if (!card) return;
   card.querySelectorAll('.answer-btn').forEach(b => b.className = 'answer-btn');
   btn.className = `answer-btn selected-${val}`;
   card.classList.remove('has-issue','ok');
@@ -2771,7 +2872,7 @@ function handleAbfahrtPhoto(event, idx) {
   if (!abfahrtPhotos[idx]) abfahrtPhotos[idx] = [];
   const files = Array.from(event.target.files);
   files.forEach(file => {
-    
+    const reader = new FileReader();
     reader.onload = e => {
       abfahrtPhotos[idx].push(e.target.result);
       renderAbfahrtPhotos(idx);
@@ -2785,7 +2886,7 @@ function renderAbfahrtPhotos(idx) {
   if (!prev) return;
   prev.innerHTML = '';
   (abfahrtPhotos[idx] || []).forEach((src, i) => {
-    
+    const img = document.createElement('img');
     img.className = 'photo-thumb'; img.src = src;
     img.onclick = () => { abfahrtPhotos[idx].splice(i,1); renderAbfahrtPhotos(idx); };
     prev.appendChild(img);
@@ -2793,7 +2894,7 @@ function renderAbfahrtPhotos(idx) {
 }
 
 async function submitAbfahrt() {
-  
+  const qs = getMandantQuestions();
   for (let i = 0; i < qs.length; i++) {
     if (!abfahrtAnswers[i]) { showToast('⚠️ Bitte alle Fragen beantworten (Frage ' + (i+1) + ')', 'error'); return; }
   }
@@ -2818,7 +2919,7 @@ async function submitAbfahrt() {
   if (isOnline && firebaseDB) {
     const makeThumbnail = (b64) => new Promise(res => {
       if (!b64 || b64.length < 10) { res(''); return; }
-      
+      const img = new Image();
       img.onload = () => {
         const c = document.createElement('canvas');
         const maxW = 100;
@@ -2874,18 +2975,18 @@ function initPOD() {
 
 function handlePodPhotos(event) {
   Array.from(event.target.files).forEach(file => {
-    
+    const reader = new FileReader();
     reader.onload = e => { podPhotos.push(e.target.result); renderPodPhotos(); };
     reader.readAsDataURL(file);
   });
 }
 
 function renderPodPhotos() {
-  const prev = document.getElementById('pod-photo-preview');
+  const prev = document.getElementById('pod-photos');
   if (!prev) return;
   prev.innerHTML = '';
   podPhotos.forEach((src, i) => {
-    
+    const img = document.createElement('img');
     img.className = 'photo-thumb'; img.src = src;
     img.onclick = () => { podPhotos.splice(i,1); renderPodPhotos(); };
     prev.appendChild(img);
@@ -2914,6 +3015,7 @@ function submitPOD() {
       const img = new Image();
       img.onload = () => {
         const c = document.createElement('canvas');
+        let w = img.width, h = img.height;
         if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
@@ -3004,7 +3106,7 @@ function submitPOD() {
 
 // ─── SIGNATURE PAD ────────────────────────────────────────────────
 function initSigPad(canvasId) {
-  
+  const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const rect = canvas.getBoundingClientRect();
   canvas.width = canvas.offsetWidth * window.devicePixelRatio;
@@ -3040,13 +3142,13 @@ function initSigPad(canvasId) {
 }
 
 function clearSig(canvasId) {
-  
+  const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function getSigData(canvasId) {
-  
+  const canvas = document.getElementById(canvasId);
   if (!canvas) return '';
   return canvas.toDataURL('image/png');
 }
@@ -3054,13 +3156,13 @@ function getSigData(canvasId) {
 // ─── IMAGE COMPRESSION ───────────────────────────────────────────
 function compressImage(base64, maxWidth, quality) {
   return new Promise(resolve => {
-    
+    const img = new Image();
     img.onload = () => {
-      
-      
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
       if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
       canvas.width = w; canvas.height = h;
-      
+      const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, w, h);
       resolve(canvas.toDataURL('image/jpeg', quality));
     };
@@ -3380,7 +3482,7 @@ function adminNav(name) {
   closeAdminMenu();
   const views = ['dashboard','fahrer','kontrollen','pods','nachrichten','fahrermsgs','einstellungen'];
   views.forEach(v => {
-    
+    const el = document.getElementById('admin-view-' + v);
     if (el) el.style.display = v === name ? 'block' : 'none';
   });
   // FAB only for fahrer
@@ -3417,7 +3519,7 @@ function toggleAdminMenu() {
 }
 
 function closeAdminMenu() {
-  
+  const overlay = document.getElementById('admin-menu-overlay');
   if (overlay) overlay.style.display = 'none';
 }
 
@@ -3425,13 +3527,13 @@ function renderAdminDashboard() {
   // Show/hide quick actions based on modules
   const qaMap = { nachrichten:'qa-nachrichten', abfahrt:'qa-kontrollen', pod:'qa-pods', fuhrpark:'qa-fuhrpark' };
   Object.entries(qaMap).forEach(([mod, id]) => {
-    
+    const el = document.getElementById(id);
     if (el) el.style.display = hasModule(mod) ? 'flex' : 'none';
   });
   // Driver activity
   const actList = document.getElementById('driver-activity-list');
   if (actList) {
-    
+    const active = DB.drivers.filter(d => d.status === 'active');
     if (active.length === 0) { actList.innerHTML = '<p class="text-muted" style="font-size:13px;padding:8px 0">Keine aktiven Fahrer</p>'; }
     else {
       actList.innerHTML = active.map(d => {
@@ -3495,7 +3597,7 @@ function renderDonutCharts() {
 }
 
 function renderWeeklyChart() {
-  
+  const canvas = document.getElementById('chart-weekly');
   if (!canvas || typeof Chart === 'undefined') return;
   // Build last 7 days data
   const days = [];
@@ -3535,7 +3637,7 @@ function renderFahrerList(drivers) {
   if (!list) return;
   list.innerHTML = '';
   if (drivers.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine Fahrer gefunden</p>'; return; }
-  
+  const card = document.createElement('div');
   card.className = 'list-card';
   drivers.forEach(d => {
     const item = document.createElement('div');
@@ -3623,8 +3725,8 @@ function saveDriver() {
   }
   let driverId = id;
   if (id) {
-    
-    DB.drivers[idx] = { ...DB.drivers[idx], ...data };
+    const idx = DB.drivers.findIndex(d => d.id === id);
+    if (idx >= 0) DB.drivers[idx] = { ...DB.drivers[idx], ...data };
     showToast('✅ Fahrer gespeichert', 'success');
   } else {
     if (!checkLicense()) return;
@@ -3634,9 +3736,9 @@ function saveDriver() {
   }
   // Save to Firebase under mandant path
   if (firebaseDB) {
-    
-    
-    firebaseDB.ref('mandanten/' + mid + '/drivers/' + driverId).set(driver);
+    const saveMid = currentMandant ? currentMandant.id : 'M-0001';
+    const saveDriver = { ...data, id: driverId, mandantId: saveMid };
+    firebaseDB.ref('mandanten/' + saveMid + '/drivers/' + driverId).set(saveDriver);
   }
   saveDriversToLocal();
   closeModal('modal-fahrer');
@@ -3644,10 +3746,11 @@ function saveDriver() {
 }
 
 function deleteDriver() {
-  
+  const id = document.getElementById('modal-fahrer-id').value;
   if (!id) return;
   if (!confirm('Fahrer wirklich löschen?')) return;
-  
+  const idx = DB.drivers.findIndex(d => d.id === id);
+  if (idx < 0) return;
   DB.drivers.splice(idx, 1);
   if (firebaseDB) firebaseDB.ref('drivers/' + id).remove();
   saveDriversToLocal();
@@ -3672,8 +3775,7 @@ function renderKontrollen() {
   if (fMaengel === 'ok') checks = checks.filter(c => c.answers && c.answers.every(a => a.answer !== 'nein'));
   if (checks.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine Einträge gefunden</p>'; return; }
   checks.forEach(c => {
-    
-    
+    const card = document.createElement('div');
     card.className = 'report-card';
     card.style.cursor = 'pointer';
     const statusColor = c.status === 'bearbeitet' ? 'var(--green)' : 'var(--accent)';
@@ -3750,8 +3852,8 @@ function renderPODs() {
   const list = document.getElementById('pods-list');
   if (!list) return;
   list.innerHTML = '';
-  
-  
+  const fDriver = document.getElementById('filter-pod-fahrer') ? document.getElementById('filter-pod-fahrer').value : '';
+  const fDate = document.getElementById('filter-pod-date') ? document.getElementById('filter-pod-date').value : '';
   const fSearch = document.getElementById('filter-pod-search') ? document.getElementById('filter-pod-search').value.toLowerCase().trim() : '';
   let pods = [...DB.pods].reverse();
   if (fDriver) pods = pods.filter(p => p.driverId === fDriver);
@@ -3767,7 +3869,7 @@ function renderPODs() {
   });
   if (pods.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:20px">Keine PODs gefunden</p>'; return; }
   pods.forEach(p => {
-    
+    const card = document.createElement('div');
     card.className = 'report-card';
     card.style.cursor = 'pointer';
     const photoCount = p.photoCount || (p.photos ? p.photos.length : 0);
@@ -3794,8 +3896,7 @@ function renderPODs() {
 function openPODDetail(p) {
   currentPODForForward = p;
   document.getElementById('pod-forward-wrap').style.display = 'none';
-  
-  
+  const cont = document.getElementById('modal-pod-content');
   const photos = p.photos || [];
   // Check if photos are real base64 or placeholder strings
   
@@ -3861,7 +3962,7 @@ function previewNotifAttachment(event) {
 
 async function sendNotification() {
   const to = document.getElementById('notif-recipient').value;
-  
+  const msg = document.getElementById('notif-message').value.trim();
   if (!msg) { showToast('⚠️ Bitte Nachricht eingeben', 'error'); return; }
 
   const newNotif = { id: 'n' + Date.now(), from: 'Admin', to, message: msg, timestamp: new Date().toISOString(), read: false };
@@ -3870,8 +3971,7 @@ async function sendNotification() {
   const fileInput = document.getElementById('notif-attachment');
   if (fileInput && fileInput.files[0] && firebaseStorage) {
     showToast('⏳ Anhang wird hochgeladen...', '');
-    
-    
+    const result = await uploadAttachmentToStorage(fileInput.files[0], 'notifications');
     if (result) {
       newNotif.attachment = result.url;
       newNotif.attachmentName = result.name;
@@ -3899,7 +3999,7 @@ function renderSentNotifs() {
   list.innerHTML = '';
   [...DB.notifications].reverse().forEach(n => {
     const toLabel = n.to === 'all' ? 'Alle Fahrer' : (DB.drivers.find(d => d.id === n.to)?.vorname + ' ' + DB.drivers.find(d => d.id === n.to)?.nachname);
-    
+    const card = document.createElement('div');
     card.className = 'report-card';
     card.innerHTML = `
       <div class="report-top">
@@ -3918,10 +4018,10 @@ function renderDriverNotifs() {
   const list = document.getElementById('driver-notifs-list');
   if (!list) return;
   list.innerHTML = '';
-  
+  const myNotifs = DB.notifications.filter(n => (n.to === currentUser.id || n.to === 'all') && !n.read);
   if (myNotifs.length === 0) { list.innerHTML = '<p class="text-muted text-center" style="padding:40px 20px">Keine Nachrichten</p>'; return; }
   [...myNotifs].reverse().forEach(n => {
-    
+    const card = document.createElement('div');
     card.className = 'notif-card' + (n.read ? ' read' : '');
     card.innerHTML = `
       <div class="notif-header">
@@ -3947,7 +4047,8 @@ function markRead(id, btn) {
   btn.replaceWith(document.createTextNode('✅ Gelesen'));
   // Update badge
   
-  
+  const myUnread = DB.notifications.filter(n => (n.to === currentUser.id || n.to === 'all') && !n.read);
+  const badge = document.getElementById('notif-badge');
   if (myUnread.length > 0) { badge.style.display='flex'; badge.textContent = myUnread.length; }
   else { badge.style.display='none'; }
 }
