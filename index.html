@@ -614,7 +614,7 @@
 
     <button class="btn btn-primary" onclick="doLogin()">🔐 Anmelden</button>
     <p id="login-hint" style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px;line-height:1.6">
-      Fahrer melden sich direkt an · Admins benötigen ihre Mandant-ID
+      Fahrer melden sich direkt an · <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="toggleMandantField()">Admin-Login</span>
     </p>
 
     <div style="margin-top:16px;padding:10px;background:var(--surface2);border-radius:10px;font-size:11px;color:var(--muted);text-align:center">
@@ -2683,6 +2683,7 @@ function doLogout() {
 
 // ─── DRIVER HOME ─────────────────────────────────────────────────
 function refreshDriverHome() {
+  try {
   document.getElementById('driver-welcome-name').textContent = currentUser.vorname + ' ' + currentUser.nachname;
   document.getElementById('driver-topbar-sub').textContent = 'Fahrer';
   // Show/hide buttons based on modules
@@ -2701,6 +2702,7 @@ function refreshDriverHome() {
   
   if (dot) dot.classList.toggle('show', myNotifs.length > 0);
   updateOfflinePending();
+  } catch(e) { console.error('refreshDriverHome error:', e); }
 }
 
 // ─── ABFAHRTSKONTROLLE ────────────────────────────────────────────
@@ -3338,6 +3340,7 @@ function downloadLastPDF() {
 
 // ─── ADMIN ────────────────────────────────────────────────────────
 function refreshAdmin() {
+  try {
   const active = DB.drivers.filter(d => d.status === 'active').length;
   const today = new Date().toDateString();
   const checksToday = DB.checks.filter(c => new Date(c.timestamp).toDateString() === today).length;
@@ -3357,11 +3360,12 @@ function refreshAdmin() {
   Object.entries(adminModuleMap).forEach(([mod, btnIds]) => {
     const ids = Array.isArray(btnIds) ? btnIds : [btnIds];
     ids.forEach(id => {
-      
+      const btn = document.getElementById(id);
       if (btn) btn.style.display = hasModule(mod) ? 'flex' : 'none';
     });
   });
   adminNav('dashboard');
+  } catch(e) { console.error('refreshAdmin error:', e); }
 }
 
 function renderFuhrpark() {
@@ -3370,6 +3374,7 @@ function renderFuhrpark() {
 
 
 function adminNav(name) {
+  try {
   closeAdminMenu();
   const views = ['dashboard','fahrer','kontrollen','pods','nachrichten','fahrermsgs','einstellungen'];
   views.forEach(v => {
@@ -3398,6 +3403,7 @@ function adminNav(name) {
   // Scroll to top
   const pc = document.getElementById('admin-page-content');
   if (pc) pc.scrollTop = 0;
+  } catch(e) { console.error('adminNav error:', e); }
 }
 
 // Keep adminTab as alias for backward compatibility
@@ -3973,6 +3979,21 @@ document.addEventListener('keypress', e => {
 // ─── LOGIN SYSTEM ────────────────────────────────────────────────
 
 // Called when user types in username field
+function toggleMandantField() {
+  const mg = document.getElementById('login-mandant-group');
+  if (!mg) return;
+  const isVisible = mg.style.display !== 'none';
+  mg.style.display = isVisible ? 'none' : 'block';
+  if (!isVisible) {
+    document.getElementById('login-mandant-admin').focus();
+    const hint = document.getElementById('login-hint');
+    if (hint) hint.innerHTML = 'Mandant-ID eingeben · <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="toggleMandantField()">Abbrechen</span>';
+  } else {
+    const hint = document.getElementById('login-hint');
+    if (hint) hint.innerHTML = 'Fahrer melden sich direkt an · <span style="color:var(--accent);cursor:pointer;text-decoration:underline" onclick="toggleMandantField()">Admin-Login</span>';
+  }
+}
+
 function onLoginInput(val) {
   const v = val.trim().toLowerCase();
   const mandantGroup = document.getElementById('login-mandant-group');
