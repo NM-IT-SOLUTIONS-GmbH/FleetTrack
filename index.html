@@ -1234,6 +1234,7 @@ function renderAdminShell() {
   const mChecks = DB.checks.filter(c=>c.mandantId===m.id && c.status==='offen').length;
   const mPods = DB.pods.filter(p=>p.mandantId===m.id && p.status==='offen').length;
   const mMsgs = DB.driverMessages.filter(dm=>dm.mandantId===m.id && !dm.readByAdmin).length;
+  const mDocWarn = DB.drivers.filter(d=>d.mandantId===m.id && (daysDiff(d.fuehrerscheinGueltigBis)<=60 || daysDiff(d.fahrerkarteGueltigBis)<=60 || !d.fuehrerscheinImg || !d.fahrerkarteImg)).length;
 
   document.getElementById('admin-nav').innerHTML = navItems.map(n =>
     `<div class="nav-item${n.id==='dashboard'?' active':''}" onclick="adminNav('${n.id}')">
@@ -1241,6 +1242,7 @@ function renderAdminShell() {
       ${n.id==='abfahrten'&&mChecks?'<span class="badge">'+mChecks+'</span>':''}
       ${n.id==='pods'&&mPods?'<span class="badge">'+mPods+'</span>':''}
       ${n.id==='nachrichten'&&mMsgs?'<span class="badge">'+mMsgs+'</span>':''}
+      ${n.id==='fahrer'&&mDocWarn?'<span class="badge" style="background:var(--warn)">'+mDocWarn+'</span>':''}
     </div>`
   ).join('');
 
@@ -1283,7 +1285,29 @@ function renderAdminDashboard(c) {
   const mc = DB.checks.filter(ch=>ch.mandantId===m.id);
   const mp = DB.pods.filter(p=>p.mandantId===m.id);
   const mv = DB.vehicles.filter(v=>v.mandantId===m.id);
+
+  // Document expiry analysis
+  const docsExpired = md.filter(d => daysDiff(d.fuehrerscheinGueltigBis)<0 || daysDiff(d.fahrerkarteGueltigBis)<0);
+  const docsExpiring = md.filter(d => {
+    const fs=daysDiff(d.fuehrerscheinGueltigBis), fk=daysDiff(d.fahrerkarteGueltigBis);
+    return (fs>=0&&fs<=60) || (fk>=0&&fk<=60);
+  });
+  const docsMissing = md.filter(d => !d.fuehrerscheinImg || !d.fahrerkarteImg);
+
+  let docWarningHtml = '';
+  if(docsExpired.length || docsExpiring.length || docsMissing.length) {
+    docWarningHtml = `
+      <div style="background:linear-gradient(135deg,var(--red-bg),var(--warn-bg));border:1px solid var(--warn);border-radius:var(--radius);padding:18px;margin-bottom:20px">
+        <h3 style="font-size:15px;margin-bottom:12px;display:flex;align-items:center;gap:8px">🪪 Dokumenten-Prüfung</h3>
+        ${docsExpired.length ? '<div style="margin-bottom:8px">⛔ <strong style="color:var(--red)">'+docsExpired.length+' Fahrer mit ABGELAUFENEN Dokumenten:</strong><br><span style="font-size:13px;color:var(--text-secondary)">'+docsExpired.map(d=>d.vorname+' '+d.nachname).join(', ')+'</span></div>' : ''}
+        ${docsExpiring.length ? '<div style="margin-bottom:8px">🟡 <strong style="color:var(--warn)">'+docsExpiring.length+' Fahrer mit bald ablaufenden Dokumenten (≤60 Tage):</strong><br><span style="font-size:13px;color:var(--text-secondary)">'+docsExpiring.map(d=>d.vorname+' '+d.nachname).join(', ')+'</span></div>' : ''}
+        ${docsMissing.length ? '<div>📷 <strong>'+docsMissing.length+' Fahrer ohne vollständige Dokumente:</strong><br><span style="font-size:13px;color:var(--text-secondary)">'+docsMissing.map(d=>d.vorname+' '+d.nachname).join(', ')+'</span></div>' : ''}
+        <button class="btn btn-outline mt-12" onclick="adminNav('fahrer')" style="font-size:13px">→ Zur Fahrer-Übersicht</button>
+      </div>`;
+  }
+
   c.innerHTML = `
+    ${docWarningHtml}
     <div class="stat-cards">
       <div class="stat-card blue"><div class="label">Fahrer</div><div class="value">${md.length}</div><div class="sub">${md.filter(d=>d.status==='active').length} aktiv</div></div>
       <div class="stat-card green"><div class="label">Fahrzeuge</div><div class="value">${mv.length}</div></div>
@@ -1309,23 +1333,47 @@ function renderAdminDashboard(c) {
 function renderAdminFahrer(c) {
   const m = currentUser.mandant;
   const drivers = DB.drivers.filter(d=>d.mandantId===m.id);
+  // Count expired/expiring docs for warning banner
+  const docWarnings = drivers.filter(d => {
+    const fsDays = daysDiff(d.fuehrerscheinGueltigBis);
+    const fkDays = daysDiff(d.fahrerkarteGueltigBis);
+    return fsDays <= 30 || fkDays <= 30 || !d.fuehrerscheinImg || !d.fahrerkarteImg;
+  });
   c.innerHTML = `
+    ${docWarnings.length?`<div style="background:var(--warn-bg);border:1px solid var(--warn);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:22px">⚠️</span>
+      <div><strong style="color:var(--warn)">${docWarnings.length} Fahrer mit Dokumenten-Warnung</strong><br>
+      <span style="font-size:13px;color:var(--text-secondary)">Fehlende oder ablaufende Dokumente — bitte prüfen</span></div>
+    </div>`:''}
     <div class="section-header"><h2>Fahrer (${drivers.length})</h2><button class="btn btn-primary" onclick="openFahrerModal()">+ Neuer Fahrer</button></div>
     <div style="overflow-x:auto"><table class="data-table">
-      <thead><tr><th>Name</th><th>Benutzer</th><th>Personal-Nr</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Benutzer</th><th>Personal-Nr</th><th>🪪 Führerschein</th><th>💳 Fahrerkarte</th><th>Status</th><th></th></tr></thead>
       <tbody>${drivers.map(d=>`<tr>
         <td>${d.vorname} ${d.nachname}</td><td>${d.username}</td><td>${d.personalNr||'-'}</td>
+        <td>${docStatusBadge(d.fuehrerscheinImg, d.fuehrerscheinGueltigBis)}</td>
+        <td>${docStatusBadge(d.fahrerkarteImg, d.fahrerkarteGueltigBis)}</td>
         <td>${d.status==='active'?'<span class="badge-status badge-green">Aktiv</span>':'<span class="badge-status badge-red">Inaktiv</span>'}</td>
         <td><button class="btn btn-outline" style="padding:4px 12px;font-size:12px" onclick="openFahrerModal('${d.id}')">Bearbeiten</button></td>
       </tr>`).join('')}</tbody>
     </table></div>`;
 }
 
+function docStatusBadge(img, gueltigBis) {
+  if(!img) return '<span class="badge-status badge-red">❌ Fehlt</span>';
+  if(!gueltigBis) return '<span class="badge-status badge-warn">📄 Kein Datum</span>';
+  const dd = daysDiff(gueltigBis);
+  if(dd < 0) return '<span class="badge-status badge-red">⛔ Abgelaufen</span>';
+  if(dd <= 30) return '<span class="badge-status badge-red">🔴 '+dd+' Tage</span>';
+  if(dd <= 60) return '<span class="badge-status badge-warn">🟡 '+dd+' Tage</span>';
+  if(dd <= 90) return '<span class="badge-status badge-blue">🔵 '+dd+' Tage</span>';
+  return '<span class="badge-status badge-green">✅ '+fmt(gueltigBis)+'</span>';
+}
+
 function openFahrerModal(did) {
   const d = did ? DB.drivers.find(x=>x.id===did) : null;
   const isNew = !d;
-  const f = d || {id:'d'+uid(),mandantId:currentUser.mandant.id,vorname:'',nachname:'',username:'',password:'Fahrer2025!',email:'',tel:'',personalNr:'',email1:'',email2:'',werkstatt:'',status:'active'};
-  const tabs = ['Person','Zugang','E-Mails','QR-Code'];
+  const f = d || {id:'d'+uid(),mandantId:currentUser.mandant.id,vorname:'',nachname:'',username:'',password:'Fahrer2025!',email:'',tel:'',personalNr:'',email1:'',email2:'',werkstatt:'',status:'active',fuehrerscheinImg:'',fuehrerscheinGueltigBis:'',fahrerkarteImg:'',fahrerkarteGueltigBis:''};
+  const tabs = ['Person','Zugang','E-Mails','Führerschein','Fahrerkarte','QR-Code'];
   openModal(`
     <div class="modal-header"><h2>${isNew?'Neuer Fahrer':'Fahrer bearbeiten'}</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
     <div class="modal-tabs">${tabs.map((t,i)=>`<div class="modal-tab${i===0?' active':''}" onclick="switchTab(this.closest('.modal-content'),'modal-tab','modal-tab-content',${i})">${t}</div>`).join('')}</div>
@@ -1351,6 +1399,69 @@ function openFahrerModal(did) {
         <div class="form-group"><label>E-Mail 2 (POD)</label><input id="fd-e2" value="${f.email2||''}"></div>
         <div class="form-group"><label>Werkstatt E-Mail</label><input id="fd-werk" value="${f.werkstatt||''}"></div>
       </div>
+      <!-- FÜHRERSCHEIN TAB -->
+      <div class="modal-tab-content">
+        <div style="background:var(--bg);border-radius:var(--radius);padding:16px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h4 style="display:flex;align-items:center;gap:8px">🪪 Führerschein</h4>
+            ${f.fuehrerscheinImg ? docStatusBadge(f.fuehrerscheinImg, f.fuehrerscheinGueltigBis) : '<span class="badge-status badge-red">Nicht vorhanden</span>'}
+          </div>
+          ${f.fuehrerscheinImg ? `
+            <img src="${f.fuehrerscheinImg}" style="width:100%;max-height:240px;object-fit:contain;border-radius:var(--radius-sm);border:1px solid var(--card-border);margin-bottom:12px;background:#fff">
+            <div style="display:flex;gap:8px;margin-bottom:12px">
+              <a href="${f.fuehrerscheinImg}" download="Fuehrerschein_${f.vorname}_${f.nachname}.jpg" class="btn btn-outline" style="flex:1;text-decoration:none;text-align:center">⬇ Herunterladen</a>
+              <button class="btn btn-danger" onclick="removeDriverDoc('${did}','fuehrerschein')" style="flex:1">🗑 Entfernen</button>
+            </div>
+          ` : `
+            <div style="text-align:center;padding:28px;border:2px dashed var(--card-border);border-radius:var(--radius-sm);color:var(--text-muted);margin-bottom:12px">
+              <div style="font-size:36px;margin-bottom:8px">📷</div>
+              <p>Kein Führerschein hochgeladen</p>
+              <p style="font-size:12px">Der Fahrer muss sein Dokument über die App hochladen</p>
+            </div>
+          `}
+          <div class="form-group">
+            <label>Gültig bis ${f.fuehrerscheinGueltigBis ? deadlineBadge(f.fuehrerscheinGueltigBis) : ''}</label>
+            <input type="date" id="fd-fs-gueltig" value="${f.fuehrerscheinGueltigBis||''}">
+          </div>
+          ${f.fuehrerscheinOcrRaw ? '<p style="font-size:12px;color:var(--text-muted)">🔍 OCR erkannt: '+f.fuehrerscheinOcrRaw+'</p>' : ''}
+          <div class="form-group" style="margin-top:8px">
+            <label>Dokument hochladen (Admin)</label>
+            <input type="file" accept="image/*" onchange="adminDocUpload(this,'${did}','fuehrerschein')" style="font-size:14px">
+          </div>
+        </div>
+      </div>
+      <!-- FAHRERKARTE TAB -->
+      <div class="modal-tab-content">
+        <div style="background:var(--bg);border-radius:var(--radius);padding:16px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h4 style="display:flex;align-items:center;gap:8px">💳 Fahrerkarte</h4>
+            ${f.fahrerkarteImg ? docStatusBadge(f.fahrerkarteImg, f.fahrerkarteGueltigBis) : '<span class="badge-status badge-red">Nicht vorhanden</span>'}
+          </div>
+          ${f.fahrerkarteImg ? `
+            <img src="${f.fahrerkarteImg}" style="width:100%;max-height:240px;object-fit:contain;border-radius:var(--radius-sm);border:1px solid var(--card-border);margin-bottom:12px;background:#fff">
+            <div style="display:flex;gap:8px;margin-bottom:12px">
+              <a href="${f.fahrerkarteImg}" download="Fahrerkarte_${f.vorname}_${f.nachname}.jpg" class="btn btn-outline" style="flex:1;text-decoration:none;text-align:center">⬇ Herunterladen</a>
+              <button class="btn btn-danger" onclick="removeDriverDoc('${did}','fahrerkarte')" style="flex:1">🗑 Entfernen</button>
+            </div>
+          ` : `
+            <div style="text-align:center;padding:28px;border:2px dashed var(--card-border);border-radius:var(--radius-sm);color:var(--text-muted);margin-bottom:12px">
+              <div style="font-size:36px;margin-bottom:8px">📷</div>
+              <p>Keine Fahrerkarte hochgeladen</p>
+              <p style="font-size:12px">Der Fahrer muss sein Dokument über die App hochladen</p>
+            </div>
+          `}
+          <div class="form-group">
+            <label>Gültig bis ${f.fahrerkarteGueltigBis ? deadlineBadge(f.fahrerkarteGueltigBis) : ''}</label>
+            <input type="date" id="fd-fk-gueltig" value="${f.fahrerkarteGueltigBis||''}">
+          </div>
+          ${f.fahrerkarteOcrRaw ? '<p style="font-size:12px;color:var(--text-muted)">🔍 OCR erkannt: '+f.fahrerkarteOcrRaw+'</p>' : ''}
+          <div class="form-group" style="margin-top:8px">
+            <label>Dokument hochladen (Admin)</label>
+            <input type="file" accept="image/*" onchange="adminDocUpload(this,'${did}','fahrerkarte')" style="font-size:14px">
+          </div>
+        </div>
+      </div>
+      <!-- QR TAB -->
       <div class="modal-tab-content">
         <div id="fd-qr" style="text-align:center;padding:20px"></div>
         <p style="text-align:center;color:var(--text-secondary);font-size:13px;margin-top:12px">QR-Code für schnelle Anmeldung</p>
@@ -1368,8 +1479,101 @@ function openFahrerModal(did) {
   },100);
 }
 
+/* Admin can upload docs for driver and trigger OCR */
+function adminDocUpload(input, did, type) {
+  const file = input.files[0];
+  if(!file || !did) return;
+  showLoading('Dokument wird verarbeitet…');
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const imgData = e.target.result;
+    const drv = DB.drivers.find(x=>x.id===did);
+    if(!drv) { hideLoading(); return; }
+    if(type==='fuehrerschein') { drv.fuehrerscheinImg = imgData; }
+    else { drv.fahrerkarteImg = imgData; }
+    // OCR for date extraction
+    const ocrDate = await extractExpiryDateOCR(imgData);
+    if(ocrDate) {
+      if(type==='fuehrerschein') { drv.fuehrerscheinGueltigBis = ocrDate; drv.fuehrerscheinOcrRaw = ocrDate; }
+      else { drv.fahrerkarteGueltigBis = ocrDate; drv.fahrerkarteOcrRaw = ocrDate; }
+      toast('OCR: Gültig bis '+fmt(ocrDate)+' erkannt','success');
+    }
+    const idx = DB.drivers.findIndex(x=>x.id===did);
+    if(idx>=0) DB.drivers[idx] = drv;
+    saveDB();
+    hideLoading();
+    openFahrerModal(did);
+    // Switch to the correct tab
+    setTimeout(()=>{
+      const tabIdx = type==='fuehrerschein' ? 3 : 4;
+      const mc = document.getElementById('modal-content');
+      if(mc) switchTab(mc,'modal-tab','modal-tab-content',tabIdx);
+    },100);
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeDriverDoc(did, type) {
+  const drv = DB.drivers.find(x=>x.id===did);
+  if(!drv) return;
+  if(type==='fuehrerschein') { drv.fuehrerscheinImg=''; drv.fuehrerscheinGueltigBis=''; drv.fuehrerscheinOcrRaw=''; }
+  else { drv.fahrerkarteImg=''; drv.fahrerkarteGueltigBis=''; drv.fahrerkarteOcrRaw=''; }
+  const idx = DB.drivers.findIndex(x=>x.id===did);
+  if(idx>=0) DB.drivers[idx] = drv;
+  saveDB();
+  openFahrerModal(did);
+  setTimeout(()=>{
+    const tabIdx = type==='fuehrerschein' ? 3 : 4;
+    const mc = document.getElementById('modal-content');
+    if(mc) switchTab(mc,'modal-tab','modal-tab-content',tabIdx);
+  },100);
+  toast('Dokument entfernt','warning');
+}
+
+/* Extract expiry date from document image using OCR */
+async function extractExpiryDateOCR(imgData) {
+  try {
+    if(typeof Tesseract === 'undefined') return null;
+    const result = await Tesseract.recognize(imgData, 'deu+eng');
+    const text = result.data.text || '';
+    // Try common date patterns on German/EU documents
+    // Patterns: DD.MM.YYYY, DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
+    const datePatterns = [
+      /(?:gültig\s*bis|valid\s*until|expiry|ablauf|4b\.?|4a\.?)[\s:]*(\d{2})[.\/-](\d{2})[.\/-](\d{4})/i,
+      /(\d{2})[.\/-](\d{2})[.\/-](20\d{2})/g,
+      /(20\d{2})[.\/-](\d{2})[.\/-](\d{2})/g
+    ];
+    // First try labeled patterns (gültig bis etc.)
+    const labelMatch = text.match(datePatterns[0]);
+    if(labelMatch) {
+      return labelMatch[3]+'-'+labelMatch[2]+'-'+labelMatch[1];
+    }
+    // Then try all DD.MM.YYYY dates and pick the latest (usually expiry)
+    const allDates = [];
+    let m;
+    const re = /(\d{2})[.\/-](\d{2})[.\/-](20\d{2})/g;
+    while((m=re.exec(text))!==null) {
+      const ds = m[3]+'-'+m[2]+'-'+m[1];
+      if(!isNaN(new Date(ds).getTime())) allDates.push(ds);
+    }
+    // Also check YYYY-MM-DD
+    const re2 = /(20\d{2})[.\/-](\d{2})[.\/-](\d{2})/g;
+    while((m=re2.exec(text))!==null) {
+      const ds = m[1]+'-'+m[2]+'-'+m[3];
+      if(!isNaN(new Date(ds).getTime())) allDates.push(ds);
+    }
+    if(allDates.length > 0) {
+      allDates.sort((a,b)=>new Date(b)-new Date(a));
+      return allDates[0]; // latest date = usually the expiry
+    }
+  } catch(e){}
+  return null;
+}
+
 function saveFahrer(did) {
   const isNew = !did;
+  // Preserve existing doc data when editing
+  const existing = did ? DB.drivers.find(d=>d.id===did) : null;
   const obj = {
     id: did || 'd'+uid(),
     mandantId: currentUser.mandant.id,
@@ -1383,7 +1587,15 @@ function saveFahrer(did) {
     email1: document.getElementById('fd-e1').value.trim(),
     email2: document.getElementById('fd-e2').value.trim(),
     werkstatt: document.getElementById('fd-werk').value.trim(),
-    status: document.getElementById('fd-status').value
+    status: document.getElementById('fd-status').value,
+    // Preserve uploaded images from existing record
+    fuehrerscheinImg: existing ? existing.fuehrerscheinImg||'' : '',
+    fahrerkarteImg: existing ? existing.fahrerkarteImg||'' : '',
+    fuehrerscheinOcrRaw: existing ? existing.fuehrerscheinOcrRaw||'' : '',
+    fahrerkarteOcrRaw: existing ? existing.fahrerkarteOcrRaw||'' : '',
+    // Save gültig-bis from date inputs (admin can manually set/override OCR)
+    fuehrerscheinGueltigBis: (document.getElementById('fd-fs-gueltig')&&document.getElementById('fd-fs-gueltig').value) || (existing?existing.fuehrerscheinGueltigBis:'') || '',
+    fahrerkarteGueltigBis: (document.getElementById('fd-fk-gueltig')&&document.getElementById('fd-fk-gueltig').value) || (existing?existing.fahrerkarteGueltigBis:'') || ''
   };
   if(isNew) DB.drivers.push(obj);
   else { const idx=DB.drivers.findIndex(d=>d.id===did); if(idx>=0) DB.drivers[idx]=obj; }
@@ -2243,31 +2455,93 @@ function renderDriverDocs() {
     <div class="doc-card">
       <div class="doc-icon">🪪</div>
       <h4>Führerschein</h4>
-      <div class="doc-status">${d.fuehrerscheinImg?'✅ Hochgeladen':'Noch nicht hochgeladen'}</div>
-      ${d.fuehrerscheinImg?'<img src="'+d.fuehrerscheinImg+'" class="doc-preview">':''}
-      <input type="file" accept="image/*" capture="environment" onchange="handleDocUpload(this,'fuehrerschein')" style="font-size:14px">
+      <div class="doc-status" style="margin-bottom:8px">
+        ${d.fuehrerscheinImg ? docStatusBadgeDriver(d.fuehrerscheinImg, d.fuehrerscheinGueltigBis) : '❌ Noch nicht hochgeladen'}
+      </div>
+      ${d.fuehrerscheinImg ? `
+        <img src="${d.fuehrerscheinImg}" class="doc-preview" style="cursor:pointer" onclick="window.open(this.src)">
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <a href="${d.fuehrerscheinImg}" download="Fuehrerschein.jpg" class="btn btn-outline" style="flex:1;text-decoration:none;text-align:center;font-size:13px">⬇ Download</a>
+        </div>
+        ${d.fuehrerscheinGueltigBis ? '<p style="font-size:13px;margin-bottom:8px"><strong>Gültig bis:</strong> '+fmt(d.fuehrerscheinGueltigBis)+' '+deadlineBadge(d.fuehrerscheinGueltigBis)+'</p>' : ''}
+      ` : ''}
+      <div class="form-group" style="margin-bottom:4px"><label>📷 Foto aufnehmen</label>
+        <input type="file" accept="image/*" capture="environment" onchange="handleDocUpload(this,'fuehrerschein')" style="font-size:14px">
+      </div>
+      ${!d.fuehrerscheinGueltigBis ? `
+        <div class="form-group"><label>Gültig bis (manuell)</label>
+          <input type="date" id="drv-fs-gueltig" value="" onchange="saveDriverDocDate('fuehrerschein',this.value)">
+        </div>
+      ` : ''}
     </div>
     <div class="doc-card">
       <div class="doc-icon">💳</div>
       <h4>Fahrerkarte</h4>
-      <div class="doc-status">${d.fahrerkarteImg?'✅ Hochgeladen':'Noch nicht hochgeladen'}</div>
-      ${d.fahrerkarteImg?'<img src="'+d.fahrerkarteImg+'" class="doc-preview">':''}
-      <input type="file" accept="image/*" capture="environment" onchange="handleDocUpload(this,'fahrerkarte')" style="font-size:14px">
+      <div class="doc-status" style="margin-bottom:8px">
+        ${d.fahrerkarteImg ? docStatusBadgeDriver(d.fahrerkarteImg, d.fahrerkarteGueltigBis) : '❌ Noch nicht hochgeladen'}
+      </div>
+      ${d.fahrerkarteImg ? `
+        <img src="${d.fahrerkarteImg}" class="doc-preview" style="cursor:pointer" onclick="window.open(this.src)">
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <a href="${d.fahrerkarteImg}" download="Fahrerkarte.jpg" class="btn btn-outline" style="flex:1;text-decoration:none;text-align:center;font-size:13px">⬇ Download</a>
+        </div>
+        ${d.fahrerkarteGueltigBis ? '<p style="font-size:13px;margin-bottom:8px"><strong>Gültig bis:</strong> '+fmt(d.fahrerkarteGueltigBis)+' '+deadlineBadge(d.fahrerkarteGueltigBis)+'</p>' : ''}
+      ` : ''}
+      <div class="form-group" style="margin-bottom:4px"><label>📷 Foto aufnehmen</label>
+        <input type="file" accept="image/*" capture="environment" onchange="handleDocUpload(this,'fahrerkarte')" style="font-size:14px">
+      </div>
+      ${!d.fahrerkarteGueltigBis ? `
+        <div class="form-group"><label>Gültig bis (manuell)</label>
+          <input type="date" id="drv-fk-gueltig" value="" onchange="saveDriverDocDate('fahrerkarte',this.value)">
+        </div>
+      ` : ''}
     </div>`;
 }
+
+function docStatusBadgeDriver(img, gueltigBis) {
+  if(!gueltigBis) return '✅ Hochgeladen — <span style="color:var(--warn)">Gültigkeitsdatum fehlt</span>';
+  const dd = daysDiff(gueltigBis);
+  if(dd < 0) return '⛔ <span style="color:var(--red);font-weight:700">ABGELAUFEN seit '+Math.abs(dd)+' Tagen!</span>';
+  if(dd <= 30) return '🔴 <span style="color:var(--red);font-weight:600">Läuft in '+dd+' Tagen ab!</span>';
+  if(dd <= 60) return '🟡 <span style="color:var(--warn);font-weight:600">Läuft in '+dd+' Tagen ab</span>';
+  return '✅ <span style="color:var(--green)">Gültig bis '+fmt(gueltigBis)+'</span>';
+}
+
+function saveDriverDocDate(type, dateVal) {
+  const d = currentUser.data;
+  if(type==='fuehrerschein') d.fuehrerscheinGueltigBis = dateVal;
+  else d.fahrerkarteGueltigBis = dateVal;
+  const idx = DB.drivers.findIndex(x=>x.id===d.id);
+  if(idx>=0) DB.drivers[idx] = d;
+  saveDB();
+  toast('Gültigkeitsdatum gespeichert');
+  renderDriverDocs();
+}
+
 function handleDocUpload(input, type) {
   const file = input.files[0];
   if(!file) return;
+  showLoading('Dokument wird verarbeitet & OCR läuft…');
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async (e) => {
+    const imgData = e.target.result;
     const d = currentUser.data;
-    if(type==='fuehrerschein') d.fuehrerscheinImg = e.target.result;
-    else d.fahrerkarteImg = e.target.result;
+    if(type==='fuehrerschein') d.fuehrerscheinImg = imgData;
+    else d.fahrerkarteImg = imgData;
+    // Run OCR to try to extract expiry date
+    const ocrDate = await extractExpiryDateOCR(imgData);
+    if(ocrDate) {
+      if(type==='fuehrerschein') { d.fuehrerscheinGueltigBis = ocrDate; d.fuehrerscheinOcrRaw = ocrDate; }
+      else { d.fahrerkarteGueltigBis = ocrDate; d.fahrerkarteOcrRaw = ocrDate; }
+      toast('✅ Gültig bis '+fmt(ocrDate)+' per OCR erkannt','success');
+    } else {
+      toast('Dokument hochgeladen — bitte Gültigkeit manuell eingeben','warning');
+    }
     const idx = DB.drivers.findIndex(x=>x.id===d.id);
     if(idx>=0) DB.drivers[idx] = d;
     saveDB();
+    hideLoading();
     renderDriverDocs();
-    toast('Dokument hochgeladen');
   };
   reader.readAsDataURL(file);
 }
