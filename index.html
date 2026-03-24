@@ -12,6 +12,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root {
   --accent: #1a7abf;
@@ -469,6 +471,63 @@ h1,h2,h3,h4,h5,h6 { font-family: var(--font-heading); font-weight: 700; }
 .mb-20 { margin-bottom: 20px; }
 .text-center { text-align: center; }
 .flex-between { display: flex; align-items: center; justify-content: space-between; }
+/* ─── TRACKING MAP ─── */
+#tracking-map { width: 100%; height: calc(100vh - 200px); min-height: 400px; z-index: 1; }
+.tracking-stats {
+  display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto;
+  background: var(--card); border-bottom: 1px solid var(--card-border);
+}
+.tracking-stat {
+  flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  background: var(--bg); border: 1px solid var(--card-border);
+  border-radius: 20px; padding: 5px 12px; font-size: 12px; font-weight: 600;
+}
+.tracking-stat .dot { width: 8px; height: 8px; border-radius: 50%; }
+.tracking-stat .dot.green { background: var(--green); }
+.tracking-stat .dot.orange { background: #f5a623; }
+.tracking-stat .dot.red { background: var(--red); }
+.tracking-stat .dot.gray { background: #aab; }
+.tracking-controls { display: flex; gap: 8px; padding: 8px 16px; background: var(--card); border-bottom: 1px solid var(--card-border); flex-wrap: wrap; }
+.tracking-controls button { font-size: 12px; }
+.vehicle-popup { font-family: var(--font-body); }
+.vehicle-popup .vp-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.vehicle-popup .vp-status { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; }
+.vehicle-popup .vp-status.driving { background: var(--green-bg); color: var(--green); }
+.vehicle-popup .vp-status.idle { background: rgba(245,166,35,0.15); color: #c68a10; }
+.vehicle-popup .vp-status.off { background: rgba(150,150,170,0.15); color: #666; }
+.vehicle-popup .vp-status.stale { background: var(--red-bg); color: var(--red); }
+.vehicle-popup .vp-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid #eee; }
+.vehicle-popup .vp-row:last-child { border: none; }
+.vehicle-popup .vp-label { color: #888; }
+.vehicle-popup .vp-val { font-weight: 600; }
+.vehicle-marker {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%; border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3); font-size: 14px;
+  transition: transform 0.3s;
+}
+.vehicle-marker:hover { transform: scale(1.2); }
+.vehicle-marker.driving { background: var(--green); }
+.vehicle-marker.idle { background: #f5a623; }
+.vehicle-marker.off { background: #aab; }
+.vehicle-marker.stale { background: var(--red); }
+.vehicle-list-panel {
+  position: absolute; top: 0; right: 0; width: 320px; height: 100%;
+  background: var(--card); border-left: 1px solid var(--card-border);
+  z-index: 1000; overflow-y: auto; display: none;
+}
+.vehicle-list-panel.open { display: block; }
+.vehicle-list-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-bottom: 1px solid var(--card-border);
+  cursor: pointer; transition: background 0.15s;
+}
+.vehicle-list-item:hover { background: var(--bg); }
+.vehicle-list-item .vli-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.vehicle-list-item .vli-info { flex: 1; }
+.vehicle-list-item .vli-id { font-weight: 700; font-size: 13px; }
+.vehicle-list-item .vli-meta { font-size: 11px; color: var(--text-muted); }
+@media (max-width: 600px) { .vehicle-list-panel { width: 100%; } #tracking-map { height: calc(100vh - 240px); } }
 </style>
 </head>
 <body>
@@ -673,6 +732,91 @@ h1,h2,h3,h4,h5,h6 { font-family: var(--font-heading); font-weight: 700; }
   </div>
 </div>
 
+<!-- ═══════════ TRACKING SCREEN (Admin) ═══════════ -->
+<div class="screen" id="screen-tracking">
+  <div class="app-shell">
+    <div class="sidebar-overlay" id="trk-overlay" onclick="toggleSidebar('admin')"></div>
+    <div class="main-content" style="width:100%">
+      <div class="topbar" style="gap:8px">
+        <button class="btn btn-outline" style="padding:6px 10px;font-size:14px" onclick="backToAdmin()">← </button>
+        <div style="flex:1;min-width:0">
+          <h1 style="font-size:16px">🗺️ Fahrzeug-Tracking</h1>
+          <div style="font-size:11px;color:var(--text-muted)" id="tracking-last-update">Wird geladen…</div>
+        </div>
+        <button class="btn btn-outline" style="padding:6px 10px;font-size:12px" onclick="openVehicleMgmt()">🚛</button>
+        <button class="btn btn-outline" style="padding:6px 10px;font-size:12px" onclick="toggleVehicleList()">📋</button>
+        <button class="btn btn-primary" style="padding:6px 10px;font-size:12px" onclick="refreshTracking()">🔄</button>
+      </div>
+      <div class="tracking-stats">
+        <div class="tracking-stat"><span class="dot green"></span> <span id="ts-driving">0</span> Fahrend</div>
+        <div class="tracking-stat"><span class="dot orange"></span> <span id="ts-idle">0</span> Leerlauf</div>
+        <div class="tracking-stat"><span class="dot gray"></span> <span id="ts-off">0</span> Aus</div>
+        <div class="tracking-stat"><span class="dot red"></span> <span id="ts-stale">0</span> Veraltet</div>
+        <div class="tracking-stat" style="color:var(--accent)"><strong id="ts-total">0</strong> Gesamt</div>
+      </div>
+      <div class="tracking-controls">
+        <button class="btn btn-outline" style="padding:5px 12px;font-size:12px;background:var(--accent);color:#fff;border-color:var(--accent)" onclick="filterTrackingMap('all')" id="tf-all">Alle</button>
+        <button class="btn btn-outline" style="padding:5px 12px;font-size:12px" onclick="filterTrackingMap('driving')" id="tf-driving">🟢 Fahrend</button>
+        <button class="btn btn-outline" style="padding:5px 12px;font-size:12px" onclick="filterTrackingMap('idle')" id="tf-idle">🟡 Leerlauf</button>
+        <button class="btn btn-outline" style="padding:5px 12px;font-size:12px" onclick="filterTrackingMap('off')" id="tf-off">⚪ Aus</button>
+        <button class="btn btn-outline" style="padding:5px 12px;font-size:12px" onclick="fitAllVehicles()">📍 Alle</button>
+      </div>
+      <div style="position:relative;flex:1">
+        <div id="tracking-map"></div>
+        <div class="vehicle-list-panel" id="vehicle-list-panel">
+          <div style="padding:14px 16px;border-bottom:1px solid var(--card-border);display:flex;align-items:center;justify-content:space-between">
+            <div style="font-family:var(--font-heading);font-weight:700;font-size:15px">Fahrzeugliste</div>
+            <button class="btn btn-outline" style="padding:4px 10px;font-size:14px" onclick="toggleVehicleList()">✕</button>
+          </div>
+          <input type="text" id="vehicle-search" placeholder="Fahrzeug suchen…" oninput="filterVehicleList()" style="width:100%;padding:10px 16px;border:none;border-bottom:1px solid var(--card-border);font-size:13px;outline:none;background:var(--bg);font-family:var(--font-body)">
+          <div id="vehicle-list-content"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: VEHICLE EDIT -->
+<div class="modal-overlay" id="modal-vehicle-edit" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-header"><h2 id="modal-vehicle-title">🚛 Fahrzeug bearbeiten</h2><button class="modal-close" onclick="document.getElementById('modal-vehicle-edit').classList.remove('show')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="v-id">
+      <div class="form-group"><label>Device-ID (GPS-Tracker)</label><input type="text" id="v-deviceId" readonly style="opacity:0.7"></div>
+      <div class="form-group"><label>Kennzeichen</label><input type="text" id="v-kennzeichen" placeholder="z.B. WES-NM 123"></div>
+      <div class="form-group"><label>Fahrzeugname</label><input type="text" id="v-name" placeholder="z.B. MAN TGX 18.510"></div>
+      <div class="form-group"><label>Modell</label><input type="text" id="v-modell" placeholder="z.B. DAF XF, MAN TGS"></div>
+      <div class="form-group"><label>Zugewiesener Fahrer</label><select id="v-driverId"><option value="">— Nicht zugewiesen —</option></select></div>
+      <div class="form-group"><label>Notizen</label><textarea id="v-notes" rows="2" placeholder="z.B. Wartung fällig…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="delete-vehicle-btn" style="display:none" onclick="deleteTrackingVehicle()">🗑 Entfernen</button>
+      <button class="btn btn-outline" onclick="document.getElementById('modal-vehicle-edit').classList.remove('show')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveTrackingVehicle()">💾 Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: VEHICLE MANAGEMENT LIST -->
+<div class="modal-overlay" id="modal-vehicle-mgmt" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal-content" onclick="event.stopPropagation()" style="max-height:85vh;display:flex;flex-direction:column">
+    <div class="modal-header"><h2>🚛 Fahrzeuge verwalten</h2><button class="modal-close" onclick="document.getElementById('modal-vehicle-mgmt').classList.remove('show')">✕</button></div>
+    <div class="modal-body" style="flex:1;overflow-y:auto;padding-bottom:0">
+      <p style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;line-height:1.5">GPS-Tracker Device-IDs können hier Kennzeichen und Fahrern zugeordnet werden. Neue Geräte werden automatisch erkannt.</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="text" id="vehicle-mgmt-search" placeholder="Suchen…" oninput="renderVehicleMgmtList()" style="flex:1;padding:8px 12px;border:1.5px solid var(--card-border);border-radius:var(--radius-sm);font-size:13px;font-family:var(--font-body)">
+        <button class="btn btn-primary" style="padding:8px 14px;font-size:12px;white-space:nowrap" onclick="autoImportVehicles()">📡 Import</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:11px;background:var(--accent);color:#fff;border-color:var(--accent)" onclick="filterVehicleMgmt('all')" id="vm-all">Alle</button>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:11px" onclick="filterVehicleMgmt('assigned')" id="vm-assigned">✅ Zugewiesen</button>
+        <button class="btn btn-outline" style="padding:4px 10px;font-size:11px" onclick="filterVehicleMgmt('unassigned')" id="vm-unassigned">⚠️ Unbenannt</button>
+      </div>
+      <div id="vehicle-mgmt-list"></div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CONTAINER -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModalBackdrop(event)">
   <div class="modal-content" id="modal-content" onclick="event.stopPropagation()"></div>
@@ -711,7 +855,7 @@ const DEFAULT_DB = {
       pubkey:'stMuoBX-6IVsZeMaB', from:'ticket@nm-it-solutions.de'
     },
     cloudinaryConfig:{ cloud:'dujbui2dw', preset:'fleet_uploads' },
-    modules:{ abfahrt:true, pod:true, nachrichten:true, fuhrpark:true, fahrerdokumente:true },
+    modules:{ abfahrt:true, pod:true, nachrichten:true, fuhrpark:true, fahrerdokumente:true, tracking:true },
     questions:[
       'Reifen und Luftdruck in Ordnung?',
       'Beleuchtung (Licht, Blinker, Bremslicht) funktionsfähig?',
@@ -730,7 +874,13 @@ const DEFAULT_DB = {
       buch:'info@nm-it-solutions.de',
       pod:'info@nm-it-solutions.de',
       hr:'info@nm-it-solutions.de'
-    }
+    },
+    gpsConfig:{
+      apiUrl:'https://gps2.logisat.pl/atlas/api2025/positions?password=api2025',
+      cloudflareWorkerUrl:'https://fleet-gps-proxy.nmitsolutionsgmbh.workers.dev',
+      refreshInterval:30
+    },
+    trackingVehicles:[]
   }],
   drivers:[
     { id:'d1', mandantId:'M-0001', vorname:'Klaus', nachname:'Bergmann', username:'k.bergmann', password:'Fahrer2025!', email:'k.bergmann@nm-it-solutions.de', tel:'+49 151 11111111', personalNr:'P-001', email1:'info@nm-it-solutions.de', email2:'info@nm-it-solutions.de', werkstatt:'werkstatt@nm-it-solutions.de', status:'active' },
@@ -966,9 +1116,15 @@ function loginSuper() {
   saNav('dashboard');
 }
 
+function backToAdmin() {
+  showScreen('screen-admin');
+  adminNav('dashboard');
+}
+
 function logout() {
   currentUser = null;
   screenStack = [];
+  stopTracking();
   if(firebaseApp) { try { firebaseApp.delete(); } catch(e){} firebaseApp=null; fbDB=null; }
   showScreen('screen-login');
 }
@@ -1068,7 +1224,7 @@ function openMandantModal(mid) {
     modules:{abfahrt:true,pod:true,nachrichten:true,fuhrpark:true,fahrerdokumente:true},
     questions:[], emailRouting:{werkstatt:'',dispo:'',buch:'',pod:'',hr:''} };
 
-  const tabs = ['Allgemein','Zugang','Firebase','EmailJS','Cloudinary','Module','Fragen','Routing'];
+  const tabs = ['Allgemein','Zugang','Firebase','EmailJS','Cloudinary','Module','Fragen','Routing','GPS/Tracking'];
   openModal(`
     <div class="modal-header"><h2>${isNew?'Neuer Mandant':'Mandant bearbeiten'}</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
     <div class="modal-tabs">${tabs.map((t,i)=>`<div class="modal-tab${i===0?' active':''}" onclick="switchTab(this.closest('.modal-content'),'modal-tab','modal-tab-content',${i})">${t}</div>`).join('')}</div>
@@ -1114,7 +1270,7 @@ function openMandantModal(mid) {
         <div class="form-group"><label>Upload Preset</label><input id="mm-cl-preset" value="${d.cloudinaryConfig.preset||''}"></div>
       </div>
       <div class="modal-tab-content">
-        ${['abfahrt','pod','nachrichten','fuhrpark','fahrerdokumente'].map(k=>
+        ${['abfahrt','pod','nachrichten','fuhrpark','fahrerdokumente','tracking'].map(k=>
           `<div style="padding:8px 0"><label><input type="checkbox" id="mm-mod-${k}" ${d.modules[k]?'checked':''}> ${k.charAt(0).toUpperCase()+k.slice(1)}</label></div>`
         ).join('')}
       </div>
@@ -1128,6 +1284,12 @@ function openMandantModal(mid) {
         <div class="form-group"><label>Buchhaltung E-Mail</label><input id="mm-rt-buch" value="${(d.emailRouting||{}).buch||''}"></div>
         <div class="form-group"><label>POD E-Mail</label><input id="mm-rt-pod" value="${(d.emailRouting||{}).pod||''}"></div>
         <div class="form-group"><label>HR E-Mail</label><input id="mm-rt-hr" value="${(d.emailRouting||{}).hr||''}"></div>
+      </div>
+      <div class="modal-tab-content">
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px">GPS-Tracking API Konfiguration für Echtzeit-Fahrzeugverfolgung</p>
+        <div class="form-group"><label>GPS API URL</label><input id="mm-gps-api" value="${(d.gpsConfig||{}).apiUrl||''}" placeholder="https://gps2.logisat.pl/atlas/api2025/positions?password=..."></div>
+        <div class="form-group"><label>Cloudflare Worker URL (CORS Proxy)</label><input id="mm-gps-worker" value="${(d.gpsConfig||{}).cloudflareWorkerUrl||''}" placeholder="https://fleet-gps-proxy.xxx.workers.dev"></div>
+        <div class="form-group"><label>Refresh-Intervall (Sekunden)</label><input type="number" id="mm-gps-interval" value="${(d.gpsConfig||{}).refreshInterval||30}" min="10" max="300"></div>
       </div>
     </div>
     <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Abbrechen</button><button class="btn btn-primary" onclick="saveMandant('${mid||''}')">Speichern</button></div>
@@ -1172,7 +1334,8 @@ function saveMandant(mid) {
       pod: document.getElementById('mm-mod-pod').checked,
       nachrichten: document.getElementById('mm-mod-nachrichten').checked,
       fuhrpark: document.getElementById('mm-mod-fuhrpark').checked,
-      fahrerdokumente: document.getElementById('mm-mod-fahrerdokumente').checked
+      fahrerdokumente: document.getElementById('mm-mod-fahrerdokumente').checked,
+      tracking: document.getElementById('mm-mod-tracking') ? document.getElementById('mm-mod-tracking').checked : false
     },
     questions: Array.from(document.querySelectorAll('.mm-q-input')).map(i=>i.value.trim()).filter(v=>v),
     emailRouting:{
@@ -1181,7 +1344,13 @@ function saveMandant(mid) {
       buch: document.getElementById('mm-rt-buch').value.trim(),
       pod: document.getElementById('mm-rt-pod').value.trim(),
       hr: document.getElementById('mm-rt-hr').value.trim()
-    }
+    },
+    gpsConfig:{
+      apiUrl: document.getElementById('mm-gps-api') ? document.getElementById('mm-gps-api').value.trim() : '',
+      cloudflareWorkerUrl: document.getElementById('mm-gps-worker') ? document.getElementById('mm-gps-worker').value.trim() : '',
+      refreshInterval: document.getElementById('mm-gps-interval') ? parseInt(document.getElementById('mm-gps-interval').value) || 30 : 30
+    },
+    trackingVehicles: mid ? (DB.mandanten.find(m=>m.id===mid)||{}).trackingVehicles || [] : []
   };
   if(isNew) DB.mandanten.push(obj);
   else { const idx=DB.mandanten.findIndex(m=>m.id===mid); if(idx>=0) DB.mandanten[idx]=obj; }
@@ -1229,6 +1398,7 @@ function renderAdminShell() {
   if(m.modules.pod) navItems.push({id:'pods', icon:'📄', label:'POD'});
   if(m.modules.nachrichten) navItems.push({id:'nachrichten', icon:'💬', label:'Nachrichten'});
   if(m.modules.fuhrpark) navItems.push({id:'fuhrpark', icon:'🔧', label:'Fuhrpark'});
+  if(m.modules.tracking) navItems.push({id:'tracking', icon:'🗺️', label:'Tracking'});
   navItems.push({id:'einstellungen', icon:'⚙️', label:'Einstellungen'});
 
   const mChecks = DB.checks.filter(c=>c.mandantId===m.id && c.status==='offen').length;
@@ -1263,11 +1433,20 @@ function renderAdminShell() {
 function adminNav(section) {
   document.querySelectorAll('#admin-nav .nav-item').forEach(n => n.classList.remove('active'));
   if(event && event.target) { const ni = event.target.closest('.nav-item'); if(ni) ni.classList.add('active'); }
-  const titles = {dashboard:'Dashboard',fahrer:'Fahrer',fahrzeuge:'Fahrzeuge',abfahrten:'Abfahrtskontrollen',pods:'Lieferbelege (POD)',nachrichten:'Nachrichten',fuhrpark:'Fuhrparkverwaltung',einstellungen:'Einstellungen'};
+  const titles = {dashboard:'Dashboard',fahrer:'Fahrer',fahrzeuge:'Fahrzeuge',abfahrten:'Abfahrtskontrollen',pods:'Lieferbelege (POD)',nachrichten:'Nachrichten',fuhrpark:'Fuhrparkverwaltung',tracking:'Fahrzeug-Tracking',einstellungen:'Einstellungen'};
   document.getElementById('admin-title').textContent = titles[section]||section;
   const c = document.getElementById('admin-content');
   document.getElementById('admin-sidebar').classList.remove('open');
   document.getElementById('admin-overlay').classList.remove('show');
+
+  // Special handling: tracking uses its own screen
+  if(section==='tracking') {
+    showScreen('screen-tracking');
+    setTimeout(() => initTrackingMap(), 150);
+    return;
+  }
+  // Make sure we're on admin screen for other sections
+  showScreen('screen-admin');
 
   if(section==='dashboard') renderAdminDashboard(c);
   else if(section==='fahrer') renderAdminFahrer(c);
@@ -1313,6 +1492,7 @@ function renderAdminDashboard(c) {
       <div class="stat-card green"><div class="label">Fahrzeuge</div><div class="value">${mv.length}</div></div>
       <div class="stat-card warn"><div class="label">Checks</div><div class="value">${mc.length}</div><div class="sub">${mc.filter(x=>x.status==='offen').length} offen</div></div>
       <div class="stat-card red"><div class="label">PODs</div><div class="value">${mp.length}</div><div class="sub">${mp.filter(x=>x.status==='offen').length} offen</div></div>
+      ${m.modules.tracking ? '<div class="stat-card blue" style="cursor:pointer" onclick="adminNav(\'tracking\')"><div class="label">🗺️ GPS-Tracking</div><div class="value">'+(m.trackingVehicles||[]).length+'</div><div class="sub">Fahrzeuge zugeordnet</div></div>' : ''}
     </div>
     <div class="charts-grid">
       <div class="chart-card"><h3>Checks & PODs (7 Tage)</h3><canvas id="adm-chart-line"></canvas></div>
@@ -1919,6 +2099,7 @@ function generateCalendar(year, month, vehs) {
 /* ─── Admin Einstellungen ─── */
 function renderAdminEinstellungen(c) {
   const m = currentUser.mandant;
+  const gps = m.gpsConfig || {};
   c.innerHTML = `
     <div class="chart-card" style="max-width:500px">
       <h3 style="margin-bottom:16px">Mandant-Informationen</h3>
@@ -1933,7 +2114,15 @@ function renderAdminEinstellungen(c) {
       <div class="form-group"><label>Public Key</label><input id="es-pk" value="${m.emailSettings.pubkey||''}"></div>
       <div class="form-group"><label>From</label><input id="es-from" value="${m.emailSettings.from||''}"></div>
       <button class="btn btn-primary mt-12" onclick="saveAdminEmailSettings()">Speichern</button>
-    </div>`;
+    </div>
+    ${m.modules.tracking ? `
+    <div class="chart-card mt-20" style="max-width:500px">
+      <h3 style="margin-bottom:16px">🗺️ GPS-Tracking Einstellungen</h3>
+      <div class="form-group"><label>GPS API URL</label><input id="gs-api" value="${gps.apiUrl||''}"></div>
+      <div class="form-group"><label>Cloudflare Worker URL (CORS Proxy)</label><input id="gs-worker" value="${gps.cloudflareWorkerUrl||''}"></div>
+      <div class="form-group"><label>Refresh-Intervall (Sekunden)</label><input type="number" id="gs-interval" value="${gps.refreshInterval||30}" min="10" max="300"></div>
+      <button class="btn btn-primary mt-12" onclick="saveAdminGpsSettings()">Speichern</button>
+    </div>` : ''}`;
 }
 function saveAdminEmailSettings() {
   const m = currentUser.mandant;
@@ -1942,6 +2131,22 @@ function saveAdminEmailSettings() {
   m.emailSettings.pubkey = document.getElementById('es-pk').value.trim();
   m.emailSettings.from = document.getElementById('es-from').value.trim();
   saveDB(); toast('Gespeichert');
+}
+function saveAdminGpsSettings() {
+  const m = currentUser.mandant;
+  if(!m.gpsConfig) m.gpsConfig = {};
+  m.gpsConfig.apiUrl = document.getElementById('gs-api').value.trim();
+  m.gpsConfig.cloudflareWorkerUrl = document.getElementById('gs-worker').value.trim();
+  m.gpsConfig.refreshInterval = parseInt(document.getElementById('gs-interval').value) || 30;
+  const idx = DB.mandanten.findIndex(x => x.id === m.id);
+  if(idx >= 0) DB.mandanten[idx] = m;
+  saveDB();
+  toast('GPS-Einstellungen gespeichert');
+  // Restart tracking timer with new interval
+  if(trackingRefreshTimer) {
+    clearInterval(trackingRefreshTimer);
+    trackingRefreshTimer = setInterval(refreshTracking, m.gpsConfig.refreshInterval * 1000);
+  }
 }
 
 /* ═══════════════════════════════════════
@@ -2574,6 +2779,536 @@ function changeDriverPass() {
   if(idx>=0) DB.drivers[idx].password = np;
   saveDB();
   toast('Passwort geändert');
+}
+
+/* ═══════════════════════════════════════
+   VEHICLE TRACKING (GPS)
+   ═══════════════════════════════════════ */
+let trackingMap = null;
+let trackingMarkers = [];
+let trackingData = [];
+let trackingFilter = 'all';
+let trackingRefreshTimer = null;
+let vehicleListOpen = false;
+let vehicleMgmtFilter = 'all';
+let gpsWorkingProxy = null;
+
+const CORS_PROXIES = [
+  { name: 'cloudflare-worker', url: '', wrap: false, encode: false },
+  { name: 'local-proxy', url: 'gps_proxy.php', wrap: false, encode: false },
+  { name: 'direct', url: '', wrap: false, encode: false },
+  { name: 'corsproxy.io', url: 'https://corsproxy.io/?', wrap: false, encode: true },
+  { name: 'allorigins', url: 'https://api.allorigins.win/get?url=', wrap: true, encode: true },
+];
+
+function getGpsConfig() {
+  if(!currentUser || !currentUser.mandant) return null;
+  const m = currentUser.mandant;
+  return m.gpsConfig || {
+    apiUrl: 'https://gps2.logisat.pl/atlas/api2025/positions?password=api2025',
+    cloudflareWorkerUrl: 'https://fleet-gps-proxy.nmitsolutionsgmbh.workers.dev',
+    refreshInterval: 30
+  };
+}
+
+function getTrackingVehicles() {
+  if(!currentUser || !currentUser.mandant) return [];
+  const stored = currentUser.mandant.trackingVehicles;
+  return Array.isArray(stored) ? stored : [];
+}
+
+function setTrackingVehicles(list) {
+  if(!currentUser || !currentUser.mandant) return;
+  currentUser.mandant.trackingVehicles = list;
+  const idx = DB.mandanten.findIndex(m => m.id === currentUser.mandant.id);
+  if(idx >= 0) DB.mandanten[idx].trackingVehicles = list;
+  saveDB();
+  if(fbDB) fbSave('mandanten/' + currentUser.mandant.id + '/trackingVehicles', list);
+}
+
+function getTrackingVehicleInfo(deviceId) {
+  const vehicles = getTrackingVehicles();
+  const v = vehicles.find(vh => vh.deviceId === deviceId);
+  if(!v) return { label: deviceId, kennzeichen: '', name: '', modell: '', driverName: '', driverId: '', notes: '' };
+  const driver = v.driverId ? DB.drivers.find(d => d.id === v.driverId) : null;
+  const driverName = driver ? driver.vorname + ' ' + driver.nachname : '';
+  return {
+    label: v.kennzeichen || v.name || deviceId,
+    kennzeichen: v.kennzeichen || '',
+    name: v.name || '',
+    modell: v.modell || '',
+    driverName,
+    driverId: v.driverId || '',
+    notes: v.notes || ''
+  };
+}
+
+/* ─── Map Initialization ─── */
+function initTrackingMap() {
+  if(trackingMap) {
+    trackingMap.invalidateSize();
+    refreshTracking();
+    return;
+  }
+  trackingMap = L.map('tracking-map', {
+    center: [51.3, 6.9],
+    zoom: 7,
+    zoomControl: true,
+    attributionControl: true
+  });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19
+  }).addTo(trackingMap);
+  refreshTracking();
+  const cfg = getGpsConfig();
+  const interval = (cfg && cfg.refreshInterval) ? cfg.refreshInterval * 1000 : 30000;
+  if(trackingRefreshTimer) clearInterval(trackingRefreshTimer);
+  trackingRefreshTimer = setInterval(refreshTracking, interval);
+}
+
+/* ─── GPS Vehicle Status ─── */
+function getVehicleStatus(v) {
+  const now = new Date();
+  const vTime = new Date(Date.UTC(v.dateTime.year, v.dateTime.month - 1, v.dateTime.day, v.dateTime.hour, v.dateTime.minute, v.dateTime.seconds));
+  const ageMinutes = (now - vTime) / 60000;
+  if(ageMinutes > 1440) return 'stale';
+  if(v.ignitionState === 'ON' && v.speed > 3) return 'driving';
+  if(v.ignitionState === 'ON') return 'idle';
+  return 'off';
+}
+
+function getStatusLabel(status) {
+  switch(status) {
+    case 'driving': return '🟢 Fahrend';
+    case 'idle': return '🟡 Leerlauf';
+    case 'off': return '⚪ Motor aus';
+    case 'stale': return '🔴 Veraltet';
+    default: return '—';
+  }
+}
+
+function getStatusColor(status) {
+  switch(status) {
+    case 'driving': return '#059669';
+    case 'idle': return '#f5a623';
+    case 'off': return '#9a9ab0';
+    case 'stale': return '#dc2626';
+    default: return '#999';
+  }
+}
+
+function formatGpsDateTime(dt) {
+  if(!dt) return '—';
+  const d = new Date(Date.UTC(dt.year, dt.month - 1, dt.day, dt.hour, dt.minute, dt.seconds));
+  return d.toLocaleString('de-DE', { timeZone: 'Europe/Berlin' });
+}
+
+function formatHeading(deg) {
+  const dirs = ['N','NNO','NO','ONO','O','OSO','SO','SSO','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(deg / 22.5) % 16] + ' (' + deg + '°)';
+}
+
+/* ─── CORS Proxy Fetch ─── */
+async function fetchWithCorsProxy(url) {
+  if(gpsWorkingProxy !== null) {
+    try {
+      const result = await tryProxy(gpsWorkingProxy, url);
+      if(result) return result;
+    } catch(e) {}
+    gpsWorkingProxy = null;
+  }
+  // Build proxy list with Cloudflare Worker URL from config
+  const cfg = getGpsConfig();
+  const proxies = CORS_PROXIES.map(p => {
+    if(p.name === 'cloudflare-worker' && cfg && cfg.cloudflareWorkerUrl) {
+      return { ...p, url: cfg.cloudflareWorkerUrl };
+    }
+    return p;
+  }).filter(p => p.url || p.name === 'direct');
+
+  for(const proxy of proxies) {
+    try {
+      const result = await tryProxy(proxy, url);
+      if(result) {
+        gpsWorkingProxy = proxy;
+        return result;
+      }
+    } catch(e) {}
+  }
+  throw new Error('Keine Verbindung zur GPS-API. Cloudflare Worker oder CORS-Proxy erforderlich.');
+}
+
+async function tryProxy(proxy, url) {
+  let fetchUrl;
+  if(proxy.name === 'direct' || proxy.url === '') {
+    fetchUrl = url;
+  } else if(proxy.encode) {
+    fetchUrl = proxy.url + encodeURIComponent(url);
+  } else {
+    fetchUrl = proxy.url;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  const resp = await fetch(fetchUrl, { signal: controller.signal });
+  clearTimeout(timeout);
+  if(!resp.ok) return null;
+
+  if(proxy.wrap) {
+    const wrapper = await resp.json();
+    const inner = typeof wrapper.contents === 'string' ? JSON.parse(wrapper.contents) : wrapper.contents;
+    return { ok: true, json: async () => inner };
+  }
+  return resp;
+}
+
+/* ─── Refresh Tracking Data ─── */
+async function refreshTracking() {
+  const cfg = getGpsConfig();
+  if(!cfg || !cfg.apiUrl) {
+    document.getElementById('tracking-last-update').textContent = '⚠ GPS-API nicht konfiguriert';
+    return;
+  }
+  try {
+    document.getElementById('tracking-last-update').textContent = '⏳ Aktualisiere…';
+    const response = await fetchWithCorsProxy(cfg.apiUrl);
+    const data = await response.json();
+    trackingData = (data.positionList || []).map(v => ({ ...v, _status: getVehicleStatus(v) }));
+    renderTrackingMarkers();
+    updateTrackingStats();
+    renderVehicleList();
+    const now = new Date().toLocaleTimeString('de-DE');
+    const proxyLabel = gpsWorkingProxy && gpsWorkingProxy.name !== 'direct' ? ' · via ' + gpsWorkingProxy.name : '';
+    document.getElementById('tracking-last-update').textContent = 'Aktualisiert: ' + now + ' · ' + trackingData.length + ' Fahrzeuge' + proxyLabel;
+  } catch(e) {
+    document.getElementById('tracking-last-update').textContent = '⚠ ' + e.message;
+    if(trackingData.length === 0) toast('GPS-Verbindung fehlgeschlagen','error');
+  }
+}
+
+/* ─── Render Map Markers ─── */
+function renderTrackingMarkers() {
+  trackingMarkers.forEach(m => trackingMap.removeLayer(m));
+  trackingMarkers = [];
+
+  const filtered = trackingFilter === 'all' ? trackingData : trackingData.filter(v => v._status === trackingFilter);
+
+  filtered.forEach(v => {
+    const lat = v.coordinate.latitude;
+    const lng = v.coordinate.longitude;
+    const status = v._status;
+    const vInfo = getTrackingVehicleInfo(v.deviceId);
+    const displayName = vInfo.kennzeichen || vInfo.name || v.deviceId;
+    const shortLabel = vInfo.kennzeichen || (v.deviceId.length > 8 ? '…' + v.deviceId.slice(-6) : v.deviceId);
+
+    const icon = L.divIcon({
+      className: '',
+      html: '<div class="vehicle-marker ' + status + '">🚛</div>',
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -18]
+    });
+
+    const marker = L.marker([lat, lng], { icon }).addTo(trackingMap);
+
+    const driverRow = vInfo.driverName ? '<div class="vp-row"><span class="vp-label">Fahrer</span><span class="vp-val">👤 ' + vInfo.driverName + '</span></div>' : '';
+    const nameRow = vInfo.name ? '<div class="vp-row"><span class="vp-label">Fahrzeug</span><span class="vp-val">' + vInfo.name + '</span></div>' : '';
+    const modellRow = vInfo.modell ? '<div class="vp-row"><span class="vp-label">Modell</span><span class="vp-val">' + vInfo.modell + '</span></div>' : '';
+    const notesRow = vInfo.notes ? '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;padding:6px 8px;background:var(--bg);border-radius:6px">📝 ' + vInfo.notes + '</div>' : '';
+
+    const popupHtml = `
+      <div class="vehicle-popup" style="min-width:230px">
+        <div class="vp-header">
+          <strong style="font-size:14px">🚛 ${displayName}</strong>
+          <span class="vp-status ${status}">${getStatusLabel(status)}</span>
+        </div>
+        ${vInfo.kennzeichen ? '<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 8px">ID: ' + v.deviceId + '</div>' : ''}
+        ${driverRow}${nameRow}${modellRow}
+        <div class="vp-row"><span class="vp-label">Geschwindigkeit</span><span class="vp-val">${v.speed} km/h</span></div>
+        <div class="vp-row"><span class="vp-label">Richtung</span><span class="vp-val">${formatHeading(v.heading)}</span></div>
+        <div class="vp-row"><span class="vp-label">Zündung</span><span class="vp-val">${v.ignitionState === 'ON' ? '🟢 An' : '⚪ Aus'}</span></div>
+        <div class="vp-row"><span class="vp-label">Letztes Signal</span><span class="vp-val">${formatGpsDateTime(v.dateTime)}</span></div>
+        <div class="vp-row"><span class="vp-label">Position</span><span class="vp-val" style="font-size:10px">${lat.toFixed(5)}, ${lng.toFixed(5)}</span></div>
+        ${notesRow}
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener"
+             style="flex:1;text-align:center;padding:6px;background:var(--accent);color:#fff;border-radius:8px;text-decoration:none;font-size:11px;font-weight:600">
+            📍 Google Maps
+          </a>
+          <button onclick="openEditVehicle('${v.deviceId}')"
+             style="flex:1;text-align:center;padding:6px;background:var(--bg);border:1px solid var(--card-border);color:var(--text);border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
+            ✏️ Bearbeiten
+          </button>
+        </div>
+      </div>`;
+    marker.bindPopup(popupHtml, { maxWidth: 300 });
+
+    marker.bindTooltip(shortLabel + (v.speed > 0 ? ' · ' + v.speed + ' km/h' : '') + (vInfo.driverName ? ' · ' + vInfo.driverName : ''), {
+      direction: 'top', offset: [0, -18], permanent: false
+    });
+
+    marker._vehicleData = v;
+    trackingMarkers.push(marker);
+  });
+}
+
+/* ─── Stats Bar ─── */
+function updateTrackingStats() {
+  const driving = trackingData.filter(v => v._status === 'driving').length;
+  const idle = trackingData.filter(v => v._status === 'idle').length;
+  const off = trackingData.filter(v => v._status === 'off').length;
+  const stale = trackingData.filter(v => v._status === 'stale').length;
+  const el = id => document.getElementById(id);
+  if(el('ts-driving')) el('ts-driving').textContent = driving;
+  if(el('ts-idle')) el('ts-idle').textContent = idle;
+  if(el('ts-off')) el('ts-off').textContent = off;
+  if(el('ts-stale')) el('ts-stale').textContent = stale;
+  if(el('ts-total')) el('ts-total').textContent = trackingData.length;
+}
+
+/* ─── Filter Controls ─── */
+function filterTrackingMap(filter) {
+  trackingFilter = filter;
+  ['all','driving','idle','off'].forEach(f => {
+    const btn = document.getElementById('tf-' + f);
+    if(btn) {
+      if(f === filter) { btn.style.background = 'var(--accent)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--accent)'; }
+      else { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
+    }
+  });
+  renderTrackingMarkers();
+}
+
+function fitAllVehicles() {
+  if(trackingMarkers.length === 0) return;
+  const group = L.featureGroup(trackingMarkers);
+  trackingMap.fitBounds(group.getBounds().pad(0.1));
+}
+
+/* ─── Vehicle Side List ─── */
+function toggleVehicleList() {
+  vehicleListOpen = !vehicleListOpen;
+  const panel = document.getElementById('vehicle-list-panel');
+  if(panel) panel.classList.toggle('open', vehicleListOpen);
+  if(vehicleListOpen) renderVehicleList();
+}
+
+function renderVehicleList() {
+  const list = document.getElementById('vehicle-list-content');
+  if(!list) return;
+  const searchVal = (document.getElementById('vehicle-search') ? document.getElementById('vehicle-search').value : '').toLowerCase();
+  let vehicles = [...trackingData].sort((a, b) => {
+    const order = { driving: 0, idle: 1, off: 2, stale: 3 };
+    return (order[a._status] || 9) - (order[b._status] || 9);
+  });
+  if(searchVal) vehicles = vehicles.filter(v => {
+    const info = getTrackingVehicleInfo(v.deviceId);
+    return [v.deviceId, info.kennzeichen, info.name, info.driverName].join(' ').toLowerCase().includes(searchVal);
+  });
+  if(vehicles.length === 0) {
+    list.innerHTML = '<p style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">Keine Fahrzeuge gefunden</p>';
+    return;
+  }
+  list.innerHTML = vehicles.map(v => {
+    const info = getTrackingVehicleInfo(v.deviceId);
+    const displayName = info.kennzeichen || info.name || v.deviceId;
+    const subLine = [getStatusLabel(v._status), v.speed > 0 ? v.speed + ' km/h' : '', info.modell || '', info.driverName ? '👤 ' + info.driverName : ''].filter(Boolean).join(' · ');
+    return '<div class="vehicle-list-item" onclick="focusVehicle(\'' + v.deviceId + '\')">' +
+      '<div class="vli-dot" style="background:' + getStatusColor(v._status) + '"></div>' +
+      '<div class="vli-info"><div class="vli-id">' + displayName + '</div><div class="vli-meta">' + subLine + '</div></div></div>';
+  }).join('');
+}
+
+function filterVehicleList() { renderVehicleList(); }
+
+function focusVehicle(deviceId) {
+  const marker = trackingMarkers.find(m => m._vehicleData && m._vehicleData.deviceId === deviceId);
+  if(marker) {
+    const v = marker._vehicleData;
+    trackingMap.setView([v.coordinate.latitude, v.coordinate.longitude], 15, { animate: true });
+    marker.openPopup();
+    if(window.innerWidth < 768) {
+      vehicleListOpen = false;
+      document.getElementById('vehicle-list-panel').classList.remove('open');
+    }
+  }
+}
+
+/* ─── Vehicle Management Modal ─── */
+function openVehicleMgmt() {
+  document.getElementById('modal-vehicle-mgmt').classList.add('show');
+  renderVehicleMgmtList();
+}
+
+function autoImportVehicles() {
+  let imported = 0;
+  const vehicles = getTrackingVehicles();
+  trackingData.forEach(v => {
+    if(!vehicles.find(vh => vh.deviceId === v.deviceId)) {
+      vehicles.push({
+        id: 'v_' + v.deviceId,
+        deviceId: v.deviceId,
+        kennzeichen: '',
+        name: '',
+        modell: '',
+        driverId: '',
+        notes: ''
+      });
+      imported++;
+    }
+  });
+  setTrackingVehicles(vehicles);
+  renderVehicleMgmtList();
+  if(imported > 0) toast(imported + ' neue Geräte importiert', 'success');
+  else toast('Alle Geräte bereits bekannt', 'warning');
+}
+
+function filterVehicleMgmt(filter) {
+  vehicleMgmtFilter = filter;
+  ['all','assigned','unassigned'].forEach(f => {
+    const btn = document.getElementById('vm-' + f);
+    if(btn) {
+      if(f === filter) { btn.style.background = 'var(--accent)'; btn.style.color = '#fff'; btn.style.borderColor = 'var(--accent)'; }
+      else { btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }
+    }
+  });
+  renderVehicleMgmtList();
+}
+
+function renderVehicleMgmtList() {
+  const list = document.getElementById('vehicle-mgmt-list');
+  if(!list) return;
+  const search = (document.getElementById('vehicle-mgmt-search') ? document.getElementById('vehicle-mgmt-search').value : '').toLowerCase();
+  let vehicles = [...getTrackingVehicles()];
+
+  if(vehicleMgmtFilter === 'assigned') vehicles = vehicles.filter(v => v.kennzeichen || v.name);
+  if(vehicleMgmtFilter === 'unassigned') vehicles = vehicles.filter(v => !v.kennzeichen && !v.name);
+
+  if(search) {
+    vehicles = vehicles.filter(v => {
+      const info = getTrackingVehicleInfo(v.deviceId);
+      return [v.deviceId, v.kennzeichen, v.name, info.driverName].join(' ').toLowerCase().includes(search);
+    });
+  }
+
+  vehicles.sort((a, b) => {
+    const aHas = a.kennzeichen || a.name ? 0 : 1;
+    const bHas = b.kennzeichen || b.name ? 0 : 1;
+    if(aHas !== bHas) return aHas - bHas;
+    return (a.kennzeichen || a.deviceId).localeCompare(b.kennzeichen || b.deviceId);
+  });
+
+  if(vehicles.length === 0) {
+    list.innerHTML = '<p style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">Keine Fahrzeuge. Klicke "📡 Import" um Geräte zu laden.</p>';
+    return;
+  }
+
+  const unassigned = getTrackingVehicles().filter(v => !v.kennzeichen && !v.name).length;
+  let html = '';
+  if(unassigned > 0) {
+    html += '<div style="background:var(--warn-bg);border:1px solid var(--warn);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:10px;font-size:12px;color:var(--warn)">⚠️ <strong>' + unassigned + '</strong> Fahrzeug(e) ohne Kennzeichen — antippen zum Bearbeiten</div>';
+  }
+
+  vehicles.forEach(v => {
+    const info = getTrackingVehicleInfo(v.deviceId);
+    const gpsData = trackingData.find(t => t.deviceId === v.deviceId);
+    const status = gpsData ? gpsData._status : 'stale';
+    const isAssigned = v.kennzeichen || v.name;
+    html += '<div class="list-card" onclick="openEditVehicle(\'' + v.deviceId + '\')" style="display:flex;align-items:center;gap:10px">' +
+      '<div style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:' + getStatusColor(status) + '"></div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-weight:700;font-size:14px;' + (isAssigned ? '' : 'color:var(--text-muted);font-style:italic') + '">' + (isAssigned ? (v.kennzeichen || v.name) : '⚠️ Unbenannt') + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted)">ID: ' + v.deviceId + (v.modell ? ' · ' + v.modell : '') + (info.driverName ? ' · 👤 ' + info.driverName : '') + '</div>' +
+      '</div><div style="font-size:16px;color:var(--text-muted)">✏️</div></div>';
+  });
+  list.innerHTML = html;
+}
+
+/* ─── Edit Single Vehicle ─── */
+function openEditVehicle(deviceId) {
+  const vehicles = getTrackingVehicles();
+  const v = vehicles.find(vh => vh.deviceId === deviceId);
+  // Populate driver dropdown
+  const sel = document.getElementById('v-driverId');
+  const m = currentUser.mandant;
+  while(sel.options.length > 1) sel.remove(1);
+  DB.drivers.filter(d => d.mandantId === m.id && d.status === 'active').forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.id;
+    opt.textContent = d.vorname + ' ' + d.nachname;
+    sel.appendChild(opt);
+  });
+
+  if(v) {
+    document.getElementById('modal-vehicle-title').textContent = '🚛 Fahrzeug bearbeiten';
+    document.getElementById('v-id').value = v.id || '';
+    document.getElementById('v-deviceId').value = v.deviceId;
+    document.getElementById('v-kennzeichen').value = v.kennzeichen || '';
+    document.getElementById('v-name').value = v.name || '';
+    document.getElementById('v-modell').value = v.modell || '';
+    document.getElementById('v-driverId').value = v.driverId || '';
+    document.getElementById('v-notes').value = v.notes || '';
+    document.getElementById('delete-vehicle-btn').style.display = 'inline-flex';
+  } else {
+    document.getElementById('modal-vehicle-title').textContent = '🚛 Neues Fahrzeug';
+    document.getElementById('v-id').value = '';
+    document.getElementById('v-deviceId').value = deviceId || '';
+    document.getElementById('v-kennzeichen').value = '';
+    document.getElementById('v-name').value = '';
+    document.getElementById('v-modell').value = '';
+    document.getElementById('v-driverId').value = '';
+    document.getElementById('v-notes').value = '';
+    document.getElementById('delete-vehicle-btn').style.display = 'none';
+  }
+  document.getElementById('modal-vehicle-edit').classList.add('show');
+}
+
+function saveTrackingVehicle() {
+  const deviceId = document.getElementById('v-deviceId').value.trim();
+  if(!deviceId) { toast('Device-ID fehlt','error'); return; }
+  const data = {
+    deviceId,
+    kennzeichen: document.getElementById('v-kennzeichen').value.trim(),
+    name: document.getElementById('v-name').value.trim(),
+    modell: document.getElementById('v-modell').value.trim(),
+    driverId: document.getElementById('v-driverId').value,
+    notes: document.getElementById('v-notes').value.trim()
+  };
+  const vehicles = getTrackingVehicles();
+  const idx = vehicles.findIndex(v => v.deviceId === deviceId);
+  if(idx >= 0) {
+    vehicles[idx] = { ...vehicles[idx], ...data };
+  } else {
+    vehicles.push({ id: 'v_' + deviceId, ...data });
+  }
+  setTrackingVehicles(vehicles);
+  document.getElementById('modal-vehicle-edit').classList.remove('show');
+  toast('Fahrzeug gespeichert');
+  renderVehicleMgmtList();
+  renderTrackingMarkers();
+  renderVehicleList();
+}
+
+function deleteTrackingVehicle() {
+  const deviceId = document.getElementById('v-deviceId').value;
+  if(!deviceId) return;
+  let vehicles = getTrackingVehicles();
+  vehicles = vehicles.filter(v => v.deviceId !== deviceId);
+  setTrackingVehicles(vehicles);
+  document.getElementById('modal-vehicle-edit').classList.remove('show');
+  toast('Fahrzeug entfernt', 'warning');
+  renderVehicleMgmtList();
+  renderTrackingMarkers();
+  renderVehicleList();
+}
+
+/* ─── Cleanup on logout ─── */
+function stopTracking() {
+  if(trackingRefreshTimer) { clearInterval(trackingRefreshTimer); trackingRefreshTimer = null; }
+  trackingMap = null;
+  trackingMarkers = [];
+  trackingData = [];
+  gpsWorkingProxy = null;
 }
 
 /* ═══════════════════════════════════════
