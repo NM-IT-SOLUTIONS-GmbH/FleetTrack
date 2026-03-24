@@ -1149,8 +1149,22 @@ function uploadToCloudinary(file, cloud, preset) {
   const fd = new FormData();
   fd.append('file', file);
   fd.append('upload_preset', preset);
-  return fetch('https://api.cloudinary.com/v1_1/'+cloud+'/auto/upload', {method:'POST', body:fd})
-    .then(r=>r.json()).then(d=>d.secure_url).catch(()=>null);
+  // Detect if file is a PDF (blob type or name)
+  const isPdf = (file.type && file.type === 'application/pdf') || 
+                (file.name && file.name.endsWith('.pdf'));
+  // PDFs must use /raw/upload, otherwise they get served as /image/upload and can't be opened
+  const resourceType = isPdf ? 'raw' : 'auto';
+  return fetch('https://api.cloudinary.com/v1_1/'+cloud+'/'+resourceType+'/upload', {method:'POST', body:fd})
+    .then(r=>r.json())
+    .then(d => {
+      let url = d.secure_url || '';
+      // Safety: if Cloudinary still returns /image/upload/ for a PDF, fix it
+      if(url && url.endsWith('.pdf') && url.includes('/image/upload/')) {
+        url = url.replace('/image/upload/', '/raw/upload/');
+      }
+      return url;
+    })
+    .catch(()=>null);
 }
 
 /* ═══════════════════════════════════════
@@ -2431,9 +2445,10 @@ async function submitAbfahrt() {
   let pdfUrl = '';
   try {
     const pdf = generateCheckPDF(m, d, abfahrtState, checkId, timestamp);
-    const pdfBlob = pdf.output('blob');
+    const pdfBlob = new Blob([pdf.output('arraybuffer')], {type:'application/pdf'});
     if(isOnline && m.cloudinaryConfig.cloud) {
-      pdfUrl = await uploadToCloudinary(pdfBlob, m.cloudinaryConfig.cloud, m.cloudinaryConfig.preset) || '';
+      const pdfFile = new File([pdfBlob], 'abfahrtskontrolle_'+checkId+'.pdf', {type:'application/pdf'});
+      pdfUrl = await uploadToCloudinary(pdfFile, m.cloudinaryConfig.cloud, m.cloudinaryConfig.preset) || '';
     }
   } catch(e) {}
 
@@ -2617,9 +2632,10 @@ async function submitPOD() {
   let pdfUrl = '';
   try {
     const pdf = generatePODPDF(m, d, podState, ocrText, comment, podId, timestamp);
-    const pdfBlob = pdf.output('blob');
+    const pdfBlob = new Blob([pdf.output('arraybuffer')], {type:'application/pdf'});
     if(isOnline && m.cloudinaryConfig.cloud) {
-      pdfUrl = await uploadToCloudinary(pdfBlob, m.cloudinaryConfig.cloud, m.cloudinaryConfig.preset) || '';
+      const pdfFile = new File([pdfBlob], 'pod_'+podId+'.pdf', {type:'application/pdf'});
+      pdfUrl = await uploadToCloudinary(pdfFile, m.cloudinaryConfig.cloud, m.cloudinaryConfig.preset) || '';
     }
   } catch(e) {}
 
