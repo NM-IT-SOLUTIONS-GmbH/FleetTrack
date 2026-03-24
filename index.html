@@ -1554,7 +1554,35 @@ function renderAdminShell() {
       if(data) { Object.values(data).forEach(p => { if(!DB.pods.find(x=>x.id===p.id)) DB.pods.push(p); }); saveDB(); }
     });
     fbListen('mandanten/'+m.id+'/driverMessages', data => {
-      if(data) { Object.values(data).forEach(dm => { if(!DB.driverMessages.find(x=>x.id===dm.id)) DB.driverMessages.push(dm); }); saveDB(); }
+      if(data) {
+        let newCount = 0;
+        Object.values(data).forEach(dm => {
+          if(!DB.driverMessages.find(x=>x.id===dm.id)) {
+            DB.driverMessages.push(dm);
+            if(!dm.readByAdmin) newCount++;
+          }
+          // Also sync read status from Firebase
+          const existing = DB.driverMessages.find(x=>x.id===dm.id);
+          if(existing && dm.readByAdmin && !existing.readByAdmin) {
+            existing.readByAdmin = dm.readByAdmin;
+            existing.readAt = dm.readAt;
+          }
+        });
+        saveDB();
+        updateAdminMsgBadge();
+        if(newCount > 0) toast('📬 '+newCount+' neue Fahrernachricht'+(newCount>1?'en':''), 'success');
+      }
+    });
+    // Also listen for notification read status updates
+    fbListen('mandanten/'+m.id+'/notifications', data => {
+      if(data) {
+        Object.values(data).forEach(n => {
+          const existing = DB.notifications.find(x=>x.id===n.id);
+          if(!existing) { DB.notifications.push(n); }
+          else if(n.read && !existing.read) { existing.read = n.read; existing.readAt = n.readAt; }
+        });
+        saveDB();
+      }
     });
   }
 }
@@ -2115,11 +2143,12 @@ function forwardPod(pid) {
 /* ─── Admin Nachrichten ─── */
 function renderAdminNachrichten(c) {
   const m = currentUser.mandant;
+  const unreadCount = DB.driverMessages.filter(dm=>dm.mandantId===m.id && !dm.readByAdmin).length;
   c.innerHTML = `
     <div class="tab-bar">
-      <div class="tab-item active" onclick="switchTab(this.closest('.content-area'),'tab-item','tab-content',0)">Senden</div>
-      <div class="tab-item" onclick="switchTab(this.closest('.content-area'),'tab-item','tab-content',1)">Empfangen</div>
-      <div class="tab-item" onclick="switchTab(this.closest('.content-area'),'tab-item','tab-content',2)">Gesendet</div>
+      <div class="tab-item active" onclick="switchTab(this.closest('.content-area'),'tab-item','tab-content',0)">📤 Senden</div>
+      <div class="tab-item" onclick="switchTab(this.closest('.content-area'),'tab-item','tab-content',1)">📥 Empfangen ${unreadCount?'<span style="background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px">'+unreadCount+'</span>':''}</div>
+      <div class="tab-item" onclick="switchTab(this.closest('.content-area'),'tab-item','tab-content',2)">✅ Gesendet</div>
     </div>
     <div class="tab-content active" id="adm-msg-send">
       <div class="form-group"><label>An</label><select id="msg-to">
@@ -2127,10 +2156,14 @@ function renderAdminNachrichten(c) {
         ${DB.drivers.filter(d=>d.mandantId===m.id).map(d=>`<option value="${d.id}">${d.vorname} ${d.nachname}</option>`).join('')}
       </select></div>
       <div class="form-group"><label>Nachricht</label><textarea id="msg-text" rows="4" placeholder="Ihre Nachricht…"></textarea></div>
+      <div class="form-group"><label>📎 Anhang (optional)</label>
+        <input type="file" id="admin-msg-attachment" accept="image/*,.pdf,.doc,.docx" style="font-size:14px">
+      </div>
+      <div id="admin-msg-attach-preview" class="photo-previews"></div>
       <button class="btn btn-primary btn-full" onclick="adminSendMsg()">📤 Nachricht senden</button>
     </div>
     <div class="tab-content" id="adm-msg-inbox">
-      <div class="msg-list">${renderAdminInbox(m)}</div>
+      <div class="msg-list" id="adm-inbox-list">${renderAdminInbox(m)}</div>
     </div>
     <div class="tab-content" id="adm-msg-sent">
       <div class="msg-list">${renderAdminSent(m)}</div>
@@ -2138,44 +2171,175 @@ function renderAdminNachrichten(c) {
 }
 function renderAdminInbox(m) {
   const msgs = DB.driverMessages.filter(dm=>dm.mandantId===m.id).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
-  if(!msgs.length) return '<div class="empty-state"><p>Keine Nachrichten</p></div>';
-  return msgs.map(dm=>`<div class="msg-item ${dm.readByAdmin?'':'unread'}" onclick="markAdminMsgRead('${dm.id}')">
-    <div style="display:flex;justify-content:space-between"><span class="msg-from">${dm.driverName||'-'}</span><span class="msg-date">${fmtDT(dm.timestamp)}</span></div>
-    <div class="msg-preview">${(dm.message||'').substring(0,100)}</div>
+  if(!msgs.length) return '<div class="empty-state"><div class="empty-icon">💬</div><p>Keine Nachrichten von Fahrern</p></div>';
+  return msgs.map(dm=>`<div class="msg-item ${dm.readByAdmin?'':'unread'}" onclick="openAdminMsgDetail('${dm.id}')">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span class="msg-from">${dm.driverName||'-'} ${dm.readByAdmin?'':'<span style="background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:6px">NEU</span>'}</span>
+      <span class="msg-date">${fmtDT(dm.timestamp)}</span>
+    </div>
+    <div class="msg-preview">${(dm.message||'').substring(0,120)}</div>
+    ${dm.attachmentUrl?'<div style="margin-top:4px;font-size:12px;color:var(--accent)">📎 Anhang vorhanden</div>':''}
   </div>`).join('');
 }
 function renderAdminSent(m) {
   const notifs = DB.notifications.filter(n=>n.mandantId===m.id).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
-  if(!notifs.length) return '<div class="empty-state"><p>Keine gesendeten Nachrichten</p></div>';
-  return notifs.map(n=>`<div class="msg-item">
+  if(!notifs.length) return '<div class="empty-state"><div class="empty-icon">📤</div><p>Keine gesendeten Nachrichten</p></div>';
+  return notifs.map(n=>`<div class="msg-item" onclick="openAdminSentDetail('${n.id}')">
     <div style="display:flex;justify-content:space-between"><span class="msg-from">An: ${n.toName||'Alle'}</span><span class="msg-date">${fmtDT(n.timestamp)}</span></div>
-    <div class="msg-preview">${(n.message||'').substring(0,100)}</div>
+    <div class="msg-preview">${(n.message||'').substring(0,120)}</div>
+    ${n.attachmentUrl?'<div style="margin-top:4px;font-size:12px;color:var(--accent)">📎 Anhang</div>':''}
   </div>`).join('');
 }
+
+function openAdminMsgDetail(mid) {
+  const dm = DB.driverMessages.find(x=>x.id===mid);
+  if(!dm) return;
+  // Mark as read immediately
+  if(!dm.readByAdmin) {
+    dm.readByAdmin = true;
+    dm.readAt = new Date().toISOString();
+    saveDB();
+    if(fbDB) fbSave('mandanten/'+dm.mandantId+'/driverMessages/'+dm.id, dm);
+    // Update sidebar badge
+    updateAdminMsgBadge();
+  }
+  openModal(`
+    <div class="modal-header"><h2>💬 Nachricht von Fahrer</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <strong style="font-size:16px">${dm.driverName||'-'}</strong>
+          <div style="font-size:12px;color:var(--text-muted)">${fmtDT(dm.timestamp)}</div>
+        </div>
+        <span class="badge-status badge-green">✅ Gelesen</span>
+      </div>
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:16px;font-size:14px;line-height:1.6;margin-bottom:16px;white-space:pre-wrap">${dm.message||''}</div>
+      ${dm.attachmentUrl?`
+        <div style="margin-bottom:16px">
+          <strong style="font-size:13px">📎 Anhang:</strong><br>
+          ${dm.attachmentUrl.match(/\.(jpg|jpeg|png|gif|webp)/i)?'<img src="'+dm.attachmentUrl+'" style="max-width:100%;max-height:300px;border-radius:var(--radius-sm);margin-top:8px;border:1px solid var(--card-border)">' : ''}
+          <a href="${dm.attachmentUrl}" target="_blank" class="btn btn-outline mt-12" style="text-decoration:none;display:inline-flex">⬇ Anhang herunterladen</a>
+        </div>
+      `:''}
+      <div class="form-group"><label>Antwort an ${dm.driverName}</label>
+        <textarea id="admin-reply-text" rows="3" placeholder="Antwort schreiben…"></textarea>
+      </div>
+      <button class="btn btn-primary btn-full" onclick="adminReplyToDriver('${dm.driverId}','${dm.driverName}')">📤 Antworten</button>
+    </div>
+  `);
+  // Re-render inbox list
+  const inboxList = document.getElementById('adm-inbox-list');
+  if(inboxList) inboxList.innerHTML = renderAdminInbox(currentUser.mandant);
+}
+
+function openAdminSentDetail(nid) {
+  const n = DB.notifications.find(x=>x.id===nid);
+  if(!n) return;
+  openModal(`
+    <div class="modal-header"><h2>📤 Gesendete Nachricht</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div style="margin-bottom:12px">
+        <strong>An:</strong> ${n.toName||'Alle Fahrer'}<br>
+        <span style="font-size:12px;color:var(--text-muted)">${fmtDT(n.timestamp)}</span>
+      </div>
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:16px;font-size:14px;line-height:1.6;white-space:pre-wrap">${n.message||''}</div>
+      ${n.attachmentUrl?`
+        <div style="margin-top:16px">
+          <strong style="font-size:13px">📎 Anhang:</strong><br>
+          ${n.attachmentUrl.match(/\.(jpg|jpeg|png|gif|webp)/i)?'<img src="'+n.attachmentUrl+'" style="max-width:100%;max-height:300px;border-radius:var(--radius-sm);margin-top:8px;border:1px solid var(--card-border)">' : ''}
+          <a href="${n.attachmentUrl}" target="_blank" class="btn btn-outline mt-12" style="text-decoration:none;display:inline-flex">⬇ Anhang herunterladen</a>
+        </div>
+      `:''}
+    </div>
+  `);
+}
+
+function adminReplyToDriver(driverId, driverName) {
+  const m = currentUser.mandant;
+  const text = document.getElementById('admin-reply-text').value.trim();
+  if(!text) { toast('Bitte Antwort eingeben','error'); return; }
+  const drv = DB.drivers.find(d=>d.id===driverId);
+  const notif = { id:'n'+uid(), mandantId:m.id, toDriverId:driverId, toName:driverName, message:text, timestamp:new Date().toISOString(), read:false };
+  DB.notifications.push(notif);
+  saveDB();
+  if(fbDB) fbPush('mandanten/'+m.id+'/notifications', notif);
+  if(drv && drv.email && m.emailSettings.serviceId) {
+    sendEmail(m.emailSettings.serviceId, m.emailSettings.templateId, {
+      to_email:drv.email, from_name:'my Fleet app', subject:'Antwort vom Disponenten',
+      message: text
+    });
+  }
+  closeModal();
+  toast('Antwort gesendet');
+  adminNav('nachrichten');
+}
+
 function markAdminMsgRead(mid) {
   const msg = DB.driverMessages.find(x=>x.id===mid);
-  if(msg) { msg.readByAdmin = true; saveDB(); }
+  if(msg && !msg.readByAdmin) {
+    msg.readByAdmin = true;
+    msg.readAt = new Date().toISOString();
+    saveDB();
+    if(fbDB) fbSave('mandanten/'+msg.mandantId+'/driverMessages/'+msg.id, msg);
+    updateAdminMsgBadge();
+    // Re-render inbox
+    const inboxList = document.getElementById('adm-inbox-list');
+    if(inboxList) inboxList.innerHTML = renderAdminInbox(currentUser.mandant);
+  }
 }
-function adminSendMsg() {
+
+function updateAdminMsgBadge() {
+  if(!currentUser || currentUser.role !== 'admin') return;
+  const m = currentUser.mandant;
+  const unread = DB.driverMessages.filter(dm=>dm.mandantId===m.id && !dm.readByAdmin).length;
+  // Update sidebar badge
+  const navItems = document.querySelectorAll('#admin-nav .nav-item');
+  navItems.forEach(item => {
+    if(item.textContent.includes('Nachrichten')) {
+      const oldBadge = item.querySelector('.badge');
+      if(oldBadge) oldBadge.remove();
+      if(unread > 0) {
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = unread;
+        item.appendChild(badge);
+      }
+    }
+  });
+}
+
+async function adminSendMsg() {
   const m = currentUser.mandant;
   const toVal = document.getElementById('msg-to').value;
   const text = document.getElementById('msg-text').value.trim();
   if(!text) { toast('Bitte Nachricht eingeben','error'); return; }
+
+  // Handle attachment
+  let attachmentUrl = '';
+  const attachInput = document.getElementById('admin-msg-attachment');
+  if(attachInput && attachInput.files[0]) {
+    showLoading('Anhang wird hochgeladen…');
+    attachmentUrl = await uploadToCloudinary(attachInput.files[0], m.cloudinaryConfig.cloud, m.cloudinaryConfig.preset) || '';
+    hideLoading();
+  }
+
   const targets = toVal==='all' ? DB.drivers.filter(d=>d.mandantId===m.id) : [DB.drivers.find(d=>d.id===toVal)].filter(Boolean);
   targets.forEach(d => {
-    const notif = { id:'n'+uid(), mandantId:m.id, toDriverId:d.id, toName:d.vorname+' '+d.nachname, message:text, timestamp:new Date().toISOString(), read:false };
+    const notif = { id:'n'+uid(), mandantId:m.id, toDriverId:d.id, toName:d.vorname+' '+d.nachname, message:text, attachmentUrl, timestamp:new Date().toISOString(), read:false };
     DB.notifications.push(notif);
     if(fbDB) fbPush('mandanten/'+m.id+'/notifications', notif);
     if(d.email && m.emailSettings.serviceId) {
       sendEmail(m.emailSettings.serviceId, m.emailSettings.templateId, {
         to_email:d.email, from_name:'my Fleet app', subject:'Neue Nachricht vom Disponenten',
-        message: text
+        message: text + (attachmentUrl ? '\n\nAnhang: '+attachmentUrl : '')
       });
     }
   });
   saveDB();
   document.getElementById('msg-text').value='';
+  if(attachInput) attachInput.value='';
   toast('Nachricht gesendet');
+  renderAdminNachrichten(document.getElementById('admin-content'));
 }
 
 /* ─── Admin Fuhrpark ─── */
@@ -2493,61 +2657,234 @@ async function submitAbfahrt() {
 }
 
 /* ─── PDF Generation ─── */
-function generateCheckPDF(m, d, state, checkId, timestamp) {
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF('portrait','mm','a4');
-  const pw = 210, ph = 297, margin = 15;
-  let y = margin;
-
-  function addHeader(pageNum, totalPages) {
-    pdf.setFillColor(26,122,191);
-    pdf.rect(0,0,pw,3,'F');
-    pdf.setFontSize(8); pdf.setTextColor(100);
-    pdf.text('my Fleet app', margin, 12);
-    pdf.setFontSize(14); pdf.setTextColor(26,122,191);
-    pdf.text('Abfahrtskontrolle', pw/2, 12, {align:'center'});
-    pdf.setFontSize(7); pdf.setTextColor(100);
-    pdf.text(m.name, pw-margin, 10, {align:'right'});
-    pdf.text(m.adresse, pw-margin, 14, {align:'right'});
-    pdf.setDrawColor(200); pdf.line(margin, 18, pw-margin, 18);
-    return 22;
-  }
-  function addFooter(pageNum) {
-    pdf.setFontSize(7); pdf.setTextColor(150);
-    pdf.text(m.name+' — '+m.adresse, margin, ph-8);
-    pdf.text(checkId, pw/2, ph-8, {align:'center'});
-    pdf.text('Seite '+pageNum, pw-margin, ph-8, {align:'right'});
-  }
-  function checkPage() { if(y > ph-40) { addFooter(pdf.getNumberOfPages()); pdf.addPage(); y=addHeader(); } }
-
-  y = addHeader(1);
-  pdf.setFontSize(10); pdf.setTextColor(50);
-  pdf.text('Fahrer: '+d.vorname+' '+d.nachname+' ('+d.personalNr+')', margin, y); y+=5;
-  pdf.text('Datum: '+fmtDT(timestamp), margin, y); y+=5;
-  pdf.text('Ref: '+checkId, margin, y); y+=8;
-
-  (state.answers||[]).forEach((a,i) => {
-    checkPage();
-    pdf.setFontSize(9); pdf.setTextColor(50);
-    const status = a.answer==='ok'?'OK':'MANGEL';
-    const color = a.answer==='ok'?[5,150,105]:[220,38,38];
-    pdf.text((i+1)+'. '+a.question, margin, y); y+=5;
-    pdf.setTextColor(...color); pdf.text(status, pw-margin-20, y-5);
-    pdf.setTextColor(50);
-    if(a.comment) { pdf.setFontSize(8); pdf.text('   Kommentar: '+a.comment, margin, y); y+=4; }
-    y+=3;
+/* ─── Image compression for PDFs ─── */
+function compressImageForPDF(dataUri, maxWidth, maxHeight, quality) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      // Scale down to fit maxWidth/maxHeight
+      if(w > maxWidth) { h = h * (maxWidth / w); w = maxWidth; }
+      if(h > maxHeight) { w = w * (maxHeight / h); h = maxHeight; }
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(w);
+      canvas.height = Math.round(h);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve({
+        data: canvas.toDataURL('image/jpeg', quality || 0.6),
+        width: canvas.width,
+        height: canvas.height
+      });
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUri;
   });
+}
 
-  if(state.signature) {
-    checkPage();
-    y+=5;
-    pdf.setFontSize(9); pdf.text('Unterschrift:', margin, y); y+=3;
-    try { pdf.addImage(state.signature, 'PNG', margin, y, 60, 25); } catch(e){}
-    y+=30;
-  }
+function generateCheckPDF(m, d, state, checkId, timestamp) {
+  // Returns a Promise now because image compression is async
+  return (async () => {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('portrait','mm','a4');
+    const pw = 210, ph = 297, mg = 15;
+    const contentW = pw - mg * 2;
+    let y = mg;
+    let pageNum = 1;
 
-  addFooter(pdf.getNumberOfPages());
-  return pdf;
+    function addHeader(title) {
+      pdf.setFillColor(26,122,191);
+      pdf.rect(0,0,pw,3,'F');
+      pdf.setFontSize(8); pdf.setTextColor(100);
+      pdf.text('my Fleet app', mg, 12);
+      pdf.setFontSize(13); pdf.setTextColor(26,122,191);
+      pdf.text(title || 'Abfahrtskontrolle', pw/2, 12, {align:'center'});
+      pdf.setFontSize(7); pdf.setTextColor(100);
+      pdf.text(m.name, pw-mg, 10, {align:'right'});
+      pdf.text(m.adresse, pw-mg, 14, {align:'right'});
+      pdf.setDrawColor(200); pdf.line(mg, 18, pw-mg, 18);
+      return 22;
+    }
+    function addFooter() {
+      pdf.setDrawColor(200); pdf.line(mg, ph-14, pw-mg, ph-14);
+      pdf.setFontSize(7); pdf.setTextColor(150);
+      pdf.text(m.name+' — '+m.adresse, mg, ph-8);
+      pdf.text(checkId, pw/2, ph-8, {align:'center'});
+      pdf.text('Seite '+pageNum, pw-mg, ph-8, {align:'right'});
+    }
+    function newPage() {
+      addFooter(); pageNum++;
+      pdf.addPage();
+      y = addHeader('Abfahrtskontrolle');
+    }
+    function checkSpace(needed) { if(y + needed > ph - 20) newPage(); }
+
+    y = addHeader('Abfahrtskontrolle');
+
+    // Driver + meta info
+    pdf.setFontSize(10); pdf.setTextColor(50);
+    pdf.text('Fahrer: '+d.vorname+' '+d.nachname+' ('+d.personalNr+')', mg, y); y+=5;
+    pdf.text('Datum: '+fmtDT(timestamp), mg, y); y+=5;
+    pdf.text('Ref: '+checkId, mg, y); y+=10;
+
+    // Questions
+    for(let i = 0; i < (state.answers||[]).length; i++) {
+      const a = state.answers[i];
+      checkSpace(20);
+
+      // Question row with colored background
+      const isOk = a.answer === 'ok';
+      pdf.setFillColor(isOk ? 240 : 255, isOk ? 255 : 240, isOk ? 240 : 240);
+      pdf.roundedRect(mg, y-3, contentW, 14, 2, 2, 'F');
+
+      pdf.setFontSize(9); pdf.setTextColor(50);
+      pdf.text((i+1)+'. '+a.question, mg+4, y+4);
+      pdf.setFontSize(9);
+      pdf.setTextColor(isOk ? 5 : 220, isOk ? 150 : 38, isOk ? 105 : 38);
+      pdf.text(isOk ? '✓ OK' : '✗ MANGEL', pw-mg-4, y+4, {align:'right'});
+      y += 14;
+
+      // Comment
+      if(a.comment) {
+        checkSpace(8);
+        pdf.setFontSize(8); pdf.setTextColor(80);
+        const commentLines = pdf.splitTextToSize('Kommentar: '+a.comment, contentW-8);
+        commentLines.forEach(l => { checkSpace(5); pdf.text(l, mg+8, y); y+=4; });
+        y += 2;
+      }
+
+      // Mangel photo — compress and embed
+      if(a.photo && a.photo.startsWith('data:')) {
+        const compressed = await compressImageForPDF(a.photo, 800, 600, 0.5);
+        if(compressed) {
+          const imgW = 50; // mm
+          const imgH = (compressed.height / compressed.width) * imgW;
+          checkSpace(imgH + 5);
+          try {
+            pdf.addImage(compressed.data, 'JPEG', mg+8, y, imgW, imgH);
+            y += imgH + 4;
+          } catch(e) {}
+        }
+      }
+      y += 2;
+    }
+
+    // Signature
+    if(state.signature) {
+      checkSpace(40);
+      y += 4;
+      pdf.setFontSize(9); pdf.setTextColor(50);
+      pdf.text('Unterschrift:', mg, y); y += 3;
+      try { pdf.addImage(state.signature, 'PNG', mg, y, 60, 25); } catch(e) {}
+      y += 30;
+    }
+
+    addFooter();
+    return pdf;
+  })();
+}
+
+/* ─── POD PDF — photos as full pages + OCR on last page ─── */
+function generatePODPDF(m, d, state, ocrText, comment, podId, timestamp) {
+  return (async () => {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('portrait','mm','a4');
+    const pw = 210, ph = 297, mg = 12;
+    const contentW = pw - mg * 2;
+    const contentH = ph - 50; // space for header + footer
+    let pageNum = 1;
+
+    function addHeader(title) {
+      pdf.setFillColor(26,122,191);
+      pdf.rect(0,0,pw,3,'F');
+      pdf.setFontSize(8); pdf.setTextColor(100);
+      pdf.text('my Fleet app', mg, 11);
+      pdf.setFontSize(13); pdf.setTextColor(26,122,191);
+      pdf.text(title || 'Lieferbeleg / POD', pw/2, 11, {align:'center'});
+      pdf.setFontSize(7); pdf.setTextColor(100);
+      pdf.text(m.name, pw-mg, 9, {align:'right'});
+      pdf.text(m.adresse, pw-mg, 13, {align:'right'});
+      pdf.setDrawColor(200); pdf.line(mg, 16, pw-mg, 16);
+    }
+    function addFooter() {
+      pdf.setDrawColor(200); pdf.line(mg, ph-14, pw-mg, ph-14);
+      pdf.setFontSize(7); pdf.setTextColor(150);
+      pdf.text(m.name+' — '+m.adresse, mg, ph-8);
+      pdf.text(podId, pw/2, ph-8, {align:'center'});
+      pdf.text('Seite '+pageNum, pw-mg, ph-8, {align:'right'});
+    }
+
+    // ── Page 1: Cover with info ──
+    addHeader('Lieferbeleg / POD');
+    let y = 22;
+    pdf.setFontSize(10); pdf.setTextColor(50);
+    pdf.text('Fahrer: '+d.vorname+' '+d.nachname, mg, y); y+=5;
+    pdf.text('Datum: '+fmtDT(timestamp), mg, y); y+=5;
+    pdf.text('Ref: '+podId, mg, y); y+=5;
+    if(comment) {
+      pdf.text('Kommentar: '+comment, mg, y); y+=5;
+    }
+    pdf.text('Anzahl Belege: '+(state.photos||[]).length+' Seite(n)', mg, y); y+=10;
+
+    // If there's OCR text, put a summary on cover page
+    if(ocrText) {
+      pdf.setFontSize(9); pdf.setTextColor(50);
+      pdf.text('OCR-Erkennung:', mg, y); y+=5;
+      pdf.setFontSize(7); pdf.setTextColor(80);
+      const lines = pdf.splitTextToSize(ocrText, contentW);
+      const maxLines = Math.min(lines.length, 50); // limit on cover
+      for(let i = 0; i < maxLines; i++) {
+        if(y > ph - 25) break;
+        pdf.text(lines[i], mg, y); y += 3.5;
+      }
+      if(lines.length > maxLines) {
+        pdf.text('... (gekürzt)', mg, y);
+      }
+    }
+    addFooter();
+
+    // ── Photo pages: one image per page, maximized ──
+    for(let i = 0; i < (state.photos||[]).length; i++) {
+      const photoData = state.photos[i];
+      if(!photoData || !photoData.startsWith('data:')) continue;
+
+      // Compress: max 1400px, JPEG 55% quality for small file size
+      const compressed = await compressImageForPDF(photoData, 1400, 1800, 0.55);
+      if(!compressed) continue;
+
+      pageNum++;
+      pdf.addPage();
+      addHeader('Lieferbeleg / POD — Beleg ' + (i+1));
+
+      // Calculate image dimensions to fit page (maximize)
+      const imgRatio = compressed.width / compressed.height;
+      const pageRatio = contentW / contentH;
+      let imgW, imgH;
+      if(imgRatio > pageRatio) {
+        // wider than page ratio → fit to width
+        imgW = contentW;
+        imgH = contentW / imgRatio;
+      } else {
+        // taller → fit to height
+        imgH = contentH;
+        imgW = contentH * imgRatio;
+      }
+
+      // Center horizontally
+      const imgX = mg + (contentW - imgW) / 2;
+      const imgY = 20; // after header
+
+      try {
+        pdf.addImage(compressed.data, 'JPEG', imgX, imgY, imgW, imgH);
+      } catch(e) {}
+
+      addFooter();
+    }
+
+    return pdf;
+  })();
 }
 
 /* ─── POD UPLOAD ─── */
@@ -2735,36 +3072,92 @@ function renderDriverMsgs() {
   const d = currentUser.data;
   const m = currentUser.mandant;
   const received = DB.notifications.filter(n=>n.mandantId===m.id && (n.toDriverId===d.id || n.toDriverId==='all')).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
+  const unreadCount = received.filter(n=>!n.read).length;
   const c = document.getElementById('driver-msgs-content');
   c.innerHTML = `
     <div class="tab-bar">
-      <div class="tab-item active" onclick="switchTab(this.closest('.driver-content'),'tab-item','tab-content',0)">📥 Empfangen</div>
+      <div class="tab-item active" onclick="switchTab(this.closest('.driver-content'),'tab-item','tab-content',0)">📥 Empfangen ${unreadCount?'<span style="background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:4px">'+unreadCount+'</span>':''}</div>
       <div class="tab-item" onclick="switchTab(this.closest('.driver-content'),'tab-item','tab-content',1)">📤 Senden</div>
     </div>
     <div class="tab-content active">
       <div class="msg-list">
-        ${received.length===0?'<div class="empty-state"><p>Keine Nachrichten</p></div>':
-        received.map(n=>`<div class="msg-item ${n.read?'':'unread'}" onclick="markDriverMsgRead('${n.id}')">
-          <div style="display:flex;justify-content:space-between"><span class="msg-from">Disposition</span><span class="msg-date">${fmtDT(n.timestamp)}</span></div>
-          <div class="msg-preview">${n.message||''}</div>
+        ${received.length===0?'<div class="empty-state"><div class="empty-icon">💬</div><p>Keine Nachrichten</p></div>':
+        received.map(n=>`<div class="msg-item ${n.read?'':'unread'}" onclick="openDriverMsgDetail('${n.id}')">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span class="msg-from">Disposition ${n.read?'':'<span style="background:var(--red);color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:4px">NEU</span>'}</span>
+            <span class="msg-date">${fmtDT(n.timestamp)}</span>
+          </div>
+          <div class="msg-preview">${(n.message||'').substring(0,120)}</div>
+          ${n.attachmentUrl?'<div style="margin-top:4px;font-size:12px;color:var(--accent)">📎 Anhang</div>':''}
         </div>`).join('')}
       </div>
     </div>
     <div class="tab-content">
       <div class="form-group"><label>Nachricht an Disponenten</label><textarea id="drv-msg-text" rows="4" placeholder="Ihre Nachricht…"></textarea></div>
+      <div class="form-group"><label>📎 Anhang (optional)</label>
+        <input type="file" id="drv-msg-attachment" accept="image/*,.pdf" capture="environment" style="font-size:14px">
+      </div>
       <button class="btn btn-primary btn-full" onclick="driverSendMsg()">📤 Senden</button>
     </div>`;
 }
+
+function openDriverMsgDetail(nid) {
+  const n = DB.notifications.find(x=>x.id===nid);
+  if(!n) return;
+  // Mark as read
+  if(!n.read) {
+    n.read = true;
+    n.readAt = new Date().toISOString();
+    saveDB();
+    if(fbDB) fbSave('mandanten/'+n.mandantId+'/notifications/'+n.id, n);
+  }
+  openModal(`
+    <div class="modal-header"><h2>💬 Nachricht</h2><button class="modal-close" onclick="closeModal()">✕</button></div>
+    <div class="modal-body">
+      <div style="margin-bottom:12px">
+        <strong>Von:</strong> Disposition<br>
+        <span style="font-size:12px;color:var(--text-muted)">${fmtDT(n.timestamp)}</span>
+      </div>
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:16px;font-size:14px;line-height:1.6;white-space:pre-wrap">${n.message||''}</div>
+      ${n.attachmentUrl?`
+        <div style="margin-top:16px">
+          <strong>📎 Anhang:</strong><br>
+          ${n.attachmentUrl.match(/\.(jpg|jpeg|png|gif|webp)/i)?'<img src="'+n.attachmentUrl+'" style="max-width:100%;max-height:300px;border-radius:var(--radius-sm);margin-top:8px;border:1px solid var(--card-border)">' : ''}
+          <a href="${n.attachmentUrl}" target="_blank" class="btn btn-outline mt-12" style="text-decoration:none;display:inline-flex">⬇ Anhang herunterladen</a>
+        </div>
+      `:''}
+    </div>
+  `);
+  renderDriverMsgs();
+}
+
 function markDriverMsgRead(nid) {
   const n = DB.notifications.find(x=>x.id===nid);
-  if(n) { n.read=true; saveDB(); renderDriverMsgs(); }
+  if(n && !n.read) {
+    n.read = true;
+    n.readAt = new Date().toISOString();
+    saveDB();
+    if(fbDB) fbSave('mandanten/'+n.mandantId+'/notifications/'+n.id, n);
+    renderDriverMsgs();
+  }
 }
-function driverSendMsg() {
+
+async function driverSendMsg() {
   const d = currentUser.data;
   const m = currentUser.mandant;
   const text = document.getElementById('drv-msg-text').value.trim();
   if(!text) { toast('Bitte Nachricht eingeben','error'); return; }
-  const msg = { id:'dm'+uid(), mandantId:m.id, driverId:d.id, driverName:d.vorname+' '+d.nachname, message:text, timestamp:new Date().toISOString(), readByAdmin:false };
+
+  // Handle attachment
+  let attachmentUrl = '';
+  const attachInput = document.getElementById('drv-msg-attachment');
+  if(attachInput && attachInput.files[0]) {
+    showLoading('Anhang wird hochgeladen…');
+    attachmentUrl = await uploadToCloudinary(attachInput.files[0], m.cloudinaryConfig.cloud, m.cloudinaryConfig.preset) || '';
+    hideLoading();
+  }
+
+  const msg = { id:'dm'+uid(), mandantId:m.id, driverId:d.id, driverName:d.vorname+' '+d.nachname, message:text, attachmentUrl, timestamp:new Date().toISOString(), readByAdmin:false };
   DB.driverMessages.push(msg);
   saveDB();
   if(fbDB) fbPush('mandanten/'+m.id+'/driverMessages', msg);
@@ -2772,11 +3165,13 @@ function driverSendMsg() {
     sendEmail(m.emailSettings.serviceId, m.emailSettings.templateId, {
       to_email:m.emailRouting.dispo, from_name:'my Fleet app',
       subject:'Fahrernachricht – '+d.vorname+' '+d.nachname,
-      message:'Nachricht von '+d.vorname+' '+d.nachname+':\n\n'+text
+      message:'Nachricht von '+d.vorname+' '+d.nachname+':\n\n'+text+(attachmentUrl?'\n\nAnhang: '+attachmentUrl:'')
     });
   }
   document.getElementById('drv-msg-text').value='';
+  if(attachInput) attachInput.value='';
   toast('Nachricht gesendet');
+  renderDriverMsgs();
 }
 
 /* ─── DRIVER DOCUMENTS ─── */
